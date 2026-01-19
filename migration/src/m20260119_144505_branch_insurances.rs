@@ -23,7 +23,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(BhfInsurance::BhfId).string().not_null())
                     .col(ColumnDef::new(BhfInsurance::IsrccCd).string().not_null())
                     .col(ColumnDef::new(BhfInsurance::IsrccNm).string().not_null())
-                    .col(ColumnDef::new(BhfInsurance::IsrcRt).unsigned().not_null())
+                    .col(ColumnDef::new(BhfInsurance::IsrcRt).integer().not_null())
                     .col(ColumnDef::new(BhfInsurance::UseYn).string().not_null())
                     .col(ColumnDef::new(BhfInsurance::RegrNm).string().not_null())
                     .col(ColumnDef::new(BhfInsurance::RegrId).string().not_null())

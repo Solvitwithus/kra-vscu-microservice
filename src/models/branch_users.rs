@@ -1,26 +1,27 @@
 use sea_orm::entity::prelude::*;
+use serde::Serialize;
 
 /// Branch Users database model
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, DeriveEntityModel)]
 #[sea_orm(table_name = "bhf_users")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i64,               // Auto-increment primary key
+    pub id: i64,
 
-    pub tin: String,            // Branch TIN, max 11
-    pub bhf_id: String,         // Branch ID, max 2
-    pub user_id: String,        // User ID, max 20
-    pub user_nm: String,        // User Name, max 60
-    pub pwd: String,            // Password, max 255
-    pub adrs: Option<String>,   // Address, nullable, max 200
-    pub cntc: Option<String>,   // Contact, nullable, max 20
-    pub auth_cd: Option<String>,// Authority Code, nullable, max 100
-    pub remark: Option<String>, // Remark, nullable, max 2000
-    pub use_yn: String,         // Y/N, max 1
-    pub regr_nm: String,        // Registrant Name, max 60
-    pub regr_id: String,        // Registrant ID, max 20
-    pub modr_nm: String,        // Modifier Name, max 60
-    pub modr_id: String,        // Modifier ID, max 20
+    pub tin: String,
+    pub bhf_id: String,
+    pub user_id: String,
+    pub user_nm: String,
+    pub pwd: String,
+    pub adrs: Option<String>,
+    pub cntc: Option<String>,
+    pub auth_cd: Option<String>,
+    pub remark: Option<String>,
+    pub use_yn: String,
+    pub regr_nm: String,
+    pub regr_id: String,
+    pub modr_nm: String,
+    pub modr_id: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

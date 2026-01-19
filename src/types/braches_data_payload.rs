@@ -46,7 +46,7 @@ pub struct BhfInsuranceSaveReq {
     pub bhfId: String,         // Branch ID, max 2 chars
     pub isrccCd: String,       // Insurance Code, max 10 chars
     pub isrccNm: String,       // Insurance Name, max 100 chars
-    pub isrcRt: u8,            // Premium Rate, max 3 digits
+    pub isrcRt: i32,            // Premium Rate, max 3 digits
     pub useYn: String,         // Y/N flag, max 1 char
     pub regrNm: String,        // Registrant Name, max 60 chars
     pub regrId: String,        // Registrant ID, max 20 chars
