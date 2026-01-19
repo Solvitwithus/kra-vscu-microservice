@@ -1,8 +1,10 @@
 mod sales;
 mod branch_operations;
+mod stock_management;
 use reqwest::Method;
 // use sales::routing::route_sales;
 use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
+use crate::stock_management::route_stock_master::route_stock_master;
 mod types;
 use axum::{Router, serve};
 use dotenvy::dotenv;
@@ -36,6 +38,7 @@ async fn main() -> Result<()> {
         .nest("/branch/customers", branch_customers(db.clone()))
         .nest("/branch/users", branch_users(db.clone()))
         .nest("/branch/insurances", branch_insurances(db.clone()))
+        .nest("/stock/master", route_stock_master(db.clone()))
         .layer(cors)
         .layer(
             tower_http::trace::TraceLayer::new_for_http()

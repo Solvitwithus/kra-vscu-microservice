@@ -5,6 +5,7 @@ pub use sea_orm_migration::prelude::*;
 mod m20260119_134024_branch_customers;
 mod m20260119_142033_branch_users;
 mod m20260119_144505_branch_insurances;
+mod m20260119_194639_stock_master;
 
 
 pub struct Migrator;
@@ -16,6 +17,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_134024_branch_customers::Migration),
             Box::new(m20260119_142033_branch_users::Migration),
             Box::new(m20260119_144505_branch_insurances::Migration),
+            Box::new(m20260119_194639_stock_master::Migration),
         ]
     }
 }
