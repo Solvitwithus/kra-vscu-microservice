@@ -2,7 +2,7 @@ mod web;
 
 use reqwest::Method;
 use web::routing::route_sales;
-
+mod types;
 use axum::{Router, serve};
 use dotenvy::dotenv;
 use sea_orm::Database;

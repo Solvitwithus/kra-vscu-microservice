@@ -3,90 +3,14 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error, warn};
 use crate::models::sales_data_model::Entity;
-
+use crate::types::salespayloadtype::{TrnsSalesSaveReq,ReceiptInfo, SalesItem};
 pub fn route_sales(db: DatabaseConnection) -> Router {
     Router::new()
         .route("/", post(post_sales).get(get_sales))
         .with_state(db)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SalesItem {
-    pub item_seq: i32,      // MUST start at 1
-    pub item_cd: String,
-    pub item_nm: String,
-    pub qty: f64,
-    pub prc: f64,
-    pub sply_amt: f64,
-    pub tax_ty_cd: String,
-    pub taxbl_amt: f64,
-    pub tax_amt: f64,
-    pub tot_amt: f64,
-}
 
-
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TrnsSalesSaveReq {
-    pub tin: String,
-    pub bhf_id: String,
-
-    pub trd_invc_no: String,
-    pub invc_no: i64,
-    pub org_invc_no: i64,
-
-    pub cust_tin: Option<String>,
-    pub cust_nm: Option<String>,
-
-    pub sales_ty_cd: String,
-    pub rcpt_ty_cd: String,
-    pub pmt_ty_cd: Option<String>,
-    pub sales_stts_cd: String,
-
-    pub cfm_dt: String,
-    pub sales_dt: String,
-
-    pub tot_item_cnt: i32,
-
-    pub taxbl_amt_a: f64,
-    pub taxbl_amt_b: f64,
-    pub taxbl_amt_c: f64,
-    pub taxbl_amt_d: f64,
-    pub taxbl_amt_e: f64,
-
-    pub tax_amt_a: f64,
-    pub tax_amt_b: f64,
-    pub tax_amt_c: f64,
-    pub tax_amt_d: f64,
-    pub tax_amt_e: f64,
-
-    pub tot_taxbl_amt: f64,
-    pub tot_tax_amt: f64,
-    pub tot_amt: f64,
-
-    pub prchr_acptc_yn: String,
-
-    pub regr_id: String,
-    pub regr_nm: String,
-
-    pub receipt: ReceiptInfo,
-    pub item_list: Vec<SalesItem>,
-}
-
-
-
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ReceiptInfo {
-    pub cust_tin: Option<String>,
-    pub cust_mbl_no: Option<String>,
-    pub rpt_no: i64,
-    pub trde_nm: Option<String>,
-    pub adrs: Option<String>,
-    pub top_msg: Option<String>,
-    pub btm_msg: Option<String>,
-    pub prchr_acptc_yn: String,
-}
 // before doing anything i would like to save the data in my own database then forward it to govt server
 pub async fn post_sales(
     State(db): State<DatabaseConnection>,
