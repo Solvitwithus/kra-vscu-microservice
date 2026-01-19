@@ -1,7 +1,8 @@
-mod web;
-
+mod sales;
+mod branch_operations;
 use reqwest::Method;
-use web::routing::route_sales;
+use sales::routing::route_sales;
+use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
 mod types;
 use axum::{Router, serve};
 use dotenvy::dotenv;
@@ -32,6 +33,9 @@ async fn main() -> Result<()> {
    
     let app = Router::new()
         .nest("/save-sales-data", route_sales(db.clone()))
+        .nest("/branch/customers", branch_customers(db.clone()))
+        .nest("/branch/users", branch_users(db.clone()))
+        .nest("/branch/insurances", branch_insurances(db.clone()))
         .layer(cors)
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
