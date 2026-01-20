@@ -21,8 +21,7 @@ pub struct StockMasterItem {
 
 /// Accepts both a single item or multiple items
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum StockMstSaveReq {
-    Single(StockMasterItem),
-    Multiple(Vec<StockMasterItem>),
-}
+
+
+pub struct StockMstSaveReq(pub Vec<StockMasterItem>);
+

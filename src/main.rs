@@ -4,12 +4,13 @@ mod stock_management;
 use reqwest::Method;
 // use sales::routing::route_sales;
 use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
-use crate::stock_management::route_stock_master::route_stock_master;
+use crate::stock_management::route_stock_master::master_router;
+
 mod types;
 use axum::{Router, serve};
 use dotenvy::dotenv;
 use sea_orm::Database;
-use std::env;
+use std::{env, sync::Arc};
 use anyhow::Result;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
@@ -25,6 +26,7 @@ async fn main() -> Result<()> {
  tracing::info!("Starting VSCU middleware service");
     let database_url = env::var("DATABASE_URL")?;
     let db = Database::connect(&database_url).await?;
+let dbi = Arc::new(Database::connect(&database_url).await?);
 
     
     let cors = CorsLayer::new()
@@ -38,7 +40,7 @@ async fn main() -> Result<()> {
         .nest("/branch/customers", branch_customers(db.clone()))
         .nest("/branch/users", branch_users(db.clone()))
         .nest("/branch/insurances", branch_insurances(db.clone()))
-        .nest("/stock/master", route_stock_master(db.clone()))
+        .nest("/stock/master", master_router(dbi.clone()))
         .layer(cors)
         .layer(
             tower_http::trace::TraceLayer::new_for_http()

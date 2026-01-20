@@ -20,8 +20,9 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(StockMaster::RegrId).string().string_len(20).not_null())
                     .col(ColumnDef::new(StockMaster::ModrNm).string().string_len(60).not_null())
                     .col(ColumnDef::new(StockMaster::ModrId).string().string_len(20).not_null())
-                    .col(timestamp(StockMaster::CreatedAt).default(Expr::current_timestamp()))
-                    .col(timestamp(StockMaster::UpdatedAt).default(Expr::current_timestamp()))
+                    .col(ColumnDef::new(StockMaster::CreatedAt).timestamp().default(Expr::current_timestamp()))
+.col(ColumnDef::new(StockMaster::UpdatedAt).timestamp().default(Expr::current_timestamp()))
+
                     .to_owned(),
             )
             .await?;
