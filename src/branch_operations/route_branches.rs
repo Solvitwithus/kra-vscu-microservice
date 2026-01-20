@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::State,
     http::StatusCode,
@@ -42,19 +44,19 @@ use crate::{
 /// ROUTERS
 /// ──────────────────────────────────────────────
 
-pub fn branch_customers(db: DatabaseConnection) -> Router {
+pub fn branch_customers(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
         .route("/", post(handle_customer_post).get(handle_customer_get))
         .with_state(db)
 }
 
-pub fn branch_users(db: DatabaseConnection) -> Router {
+pub fn branch_users(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
         .route("/", post(handle_user_post).get(handle_user_get))
         .with_state(db)
 }
 
-pub fn branch_insurances(db: DatabaseConnection) -> Router {
+pub fn branch_insurances(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
         .route("/", post(handle_insurance_post).get(handle_insurance_get))
         .with_state(db)
@@ -65,7 +67,7 @@ pub fn branch_insurances(db: DatabaseConnection) -> Router {
 /// ──────────────────────────────────────────────
 
 pub async fn handle_customer_post(
-    State(db): State<DatabaseConnection>,
+    State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<BhfCustSaveReq>,
 ) -> impl IntoResponse {
     let model = CustomerActiveModel {
@@ -87,7 +89,7 @@ pub async fn handle_customer_post(
         ..Default::default()
     };
 
-    match model.insert(&db).await {
+    match model.insert(db.as_ref()).await {
         Ok(saved) => (
             StatusCode::CREATED,
             Json(json!({
@@ -111,9 +113,9 @@ pub async fn handle_customer_post(
 }
 
 pub async fn handle_customer_get(
-    State(db): State<DatabaseConnection>,
+    State(db): State<Arc<DatabaseConnection>>,
 ) -> impl IntoResponse {
-    match CustomerEntity::find().all(&db).await {
+    match CustomerEntity::find().all(db.as_ref()).await {
         Ok(customers) => (
             StatusCode::OK,
             Json(json!({
@@ -140,7 +142,7 @@ pub async fn handle_customer_get(
 /// ──────────────────────────────────────────────
 
 pub async fn handle_user_post(
-    State(db): State<DatabaseConnection>,
+    State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<BhfUserSaveReq>,
 ) -> impl IntoResponse {
     let model = UserActiveModel {
@@ -161,7 +163,7 @@ pub async fn handle_user_post(
         ..Default::default()
     };
 
-    match model.insert(&db).await {
+    match model.insert(db.as_ref()).await {
         Ok(saved) => (
             StatusCode::CREATED,
             Json(json!({
@@ -185,9 +187,9 @@ pub async fn handle_user_post(
 }
 
 pub async fn handle_user_get(
-    State(db): State<DatabaseConnection>,
+    State(db): State<Arc<DatabaseConnection>>,
 ) -> impl IntoResponse {
-    match UserEntity::find().all(&db).await {
+    match UserEntity::find().all(db.as_ref()).await {
         Ok(users) => (
             StatusCode::OK,
             Json(json!({
@@ -214,7 +216,7 @@ pub async fn handle_user_get(
 /// ──────────────────────────────────────────────
 
 pub async fn handle_insurance_post(
-    State(db): State<DatabaseConnection>,
+    State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<BhfInsuranceSaveReq>,
 ) -> impl IntoResponse {
     let model = InsuranceActiveModel {
@@ -231,7 +233,7 @@ pub async fn handle_insurance_post(
         ..Default::default()
     };
 
-    match model.insert(&db).await {
+    match model.insert(db.as_ref()).await {
         Ok(saved) => (
             StatusCode::CREATED,
             Json(json!({
@@ -255,9 +257,9 @@ pub async fn handle_insurance_post(
 }
 
 pub async fn handle_insurance_get(
-    State(db): State<DatabaseConnection>,
+    State(db): State<Arc<DatabaseConnection>>,
 ) -> impl IntoResponse {
-    match InsuranceEntity::find().all(&db).await {
+    match InsuranceEntity::find().all(db.as_ref()).await {
         Ok(insurances) => (
             StatusCode::OK,
             Json(json!({

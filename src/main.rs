@@ -25,8 +25,8 @@ async fn main() -> Result<()> {
 
  tracing::info!("Starting VSCU middleware service");
     let database_url = env::var("DATABASE_URL")?;
-    let db = Database::connect(&database_url).await?;
-let dbi = Arc::new(Database::connect(&database_url).await?);
+    // let db = Database::connect(&database_url).await?;
+let db = Arc::new(Database::connect(&database_url).await?);
 
     
     let cors = CorsLayer::new()
@@ -40,7 +40,7 @@ let dbi = Arc::new(Database::connect(&database_url).await?);
         .nest("/branch/customers", branch_customers(db.clone()))
         .nest("/branch/users", branch_users(db.clone()))
         .nest("/branch/insurances", branch_insurances(db.clone()))
-        .nest("/stock/master", master_router(dbi.clone()))
+        .nest("/stock/master", master_router(db.clone()))
         .layer(cors)
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
