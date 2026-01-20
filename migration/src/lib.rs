@@ -7,6 +7,8 @@ mod m20260119_142033_branch_users;
 mod m20260119_144505_branch_insurances;
 mod m20260119_194639_stock_master;
 
+mod m20260120_133135_product_save_items;
+
 
 pub struct Migrator;
 
@@ -18,6 +20,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_142033_branch_users::Migration),
             Box::new(m20260119_144505_branch_insurances::Migration),
             Box::new(m20260119_194639_stock_master::Migration),
+          
+            Box::new(m20260120_133135_product_save_items::Migration),
         ]
     }
 }

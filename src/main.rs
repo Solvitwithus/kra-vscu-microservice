@@ -4,8 +4,8 @@ mod stock_management;
 use reqwest::Method;
 // use sales::routing::route_sales;
 use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
-use crate::stock_management::route_stock_master::master_router;
-
+use crate::{product_management::items_save_items::items_save_items_router, stock_management::route_stock_master::master_router};
+mod product_management;
 mod types;
 use axum::{Router, serve};
 use dotenvy::dotenv;
@@ -41,6 +41,8 @@ let db = Arc::new(Database::connect(&database_url).await?);
         .nest("/branch/users", branch_users(db.clone()))
         .nest("/branch/insurances", branch_insurances(db.clone()))
         .nest("/stock/master", master_router(db.clone()))
+        .nest("/product/items_save", items_save_items_router(db.clone()))
+        .nest("/product/items_select", items_save_items_router(db.clone()))
         .layer(cors)
         .layer(
             tower_http::trace::TraceLayer::new_for_http()

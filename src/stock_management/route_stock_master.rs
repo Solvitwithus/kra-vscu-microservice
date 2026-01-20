@@ -81,7 +81,7 @@ async fn create_stock_items(
 
 
 // ── Error helper ───────────────────────────────────────────────────────────────
-fn error_response(message: &str, code: StatusCode) -> (StatusCode, Json<serde_json::Value>) {
+pub fn error_response(message: &str, code: StatusCode) -> (StatusCode, Json<serde_json::Value>) {
     (code, Json(json!({
         "resultCd": code.as_u16().to_string(),
         "resultMsg": message,
