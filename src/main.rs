@@ -1,10 +1,11 @@
 mod sales;
 mod branch_operations;
+mod signup;
 mod stock_management;
 use reqwest::Method;
 // use sales::routing::route_sales;
 use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
-use crate::{product_management::items_save_items::items_save_items_router, stock_management::route_stock_master::master_router};
+use crate::{product_management::items_save_items::items_save_items_router, signup::signup_login::{log_in, sign_up}, stock_management::route_stock_master::master_router};
 mod product_management;
 mod types;
 use axum::{Router, serve};
@@ -43,6 +44,8 @@ let db = Arc::new(Database::connect(&database_url).await?);
         .nest("/stock/master", master_router(db.clone()))
         .nest("/product/items_save", items_save_items_router(db.clone()))
         .nest("/product/items_select", items_save_items_router(db.clone()))
+        .nest("/signup", sign_up(db.clone()))
+        .nest("/login", log_in(db.clone()))
         .layer(cors)
         .layer(
             tower_http::trace::TraceLayer::new_for_http()

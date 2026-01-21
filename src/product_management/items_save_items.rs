@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseConnection, EntityTrait, TransactionTrait};
 use serde_json::json;
 
-use crate::{models::product_save_items::{ActiveModel, Entity, Model}, stock_management::route_stock_master::error_response, types::product_management_payload_types::ItemSaveReq};
+use crate::{models::product_save_items::{ActiveModel, Entity}, stock_management::route_stock_master::error_response, types::product_management_payload_types::ItemSaveReq};
 
 pub fn items_save_items_router(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
