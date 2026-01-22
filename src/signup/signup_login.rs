@@ -4,12 +4,13 @@ use axum::{
     Json, Router, extract::State, response::IntoResponse,
     routing::post
 };
+use serde::Deserialize;
 use rand::{distributions::Alphanumeric, Rng};
 use serde_json::json;
-use tracing::info;
+use tracing::{error, info, warn};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use crate::models::sign_up::Entity as UserEntity;
-
+use crate::models::sign_up::{Entity as UserEntity, Model};
+use crate::models::sign_up::Entity;
 use crate::{
     models::sign_up::{ActiveModel, Column},
     types::signup::{LoginPayload, SignUpPayload}
@@ -24,6 +25,12 @@ pub fn sign_up(db: Arc<DatabaseConnection>) -> Router {
 pub fn log_in(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
         .route("/", post(login_handler))
+        .with_state(db)
+}
+
+pub fn log_in_users(db: Arc<DatabaseConnection>) -> Router {
+    Router::new()
+        .route("/", post(login_handler_fetch))
         .with_state(db)
 }
 
@@ -151,4 +158,43 @@ pub async fn login_handler(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct UserFetch {
+    pub tracing_id: String,
+}
+
+pub async fn login_handler_fetch(
+    State(db): State<Arc<DatabaseConnection>>,
+    Json(data): Json<UserFetch>,
+) -> impl IntoResponse {
+    info!("Login fetch via POST for tracing_id: {}", data.tracing_id);
+
+  match Entity::find()
+    .filter(Column::TrackingId.eq(data.tracing_id))
+    .all(db.as_ref())
+    .await
+{
+    Ok(users) => {
+        info!("Fetched users: {:?}", users);
+        (
+            axum::http::StatusCode::OK,
+            Json(json!({ "users": users })),
+        )
+            .into_response()
+    }
+    Err(err) => {
+        error!("DB error fetching user by tracking_id {err}");
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,   // ← change to 500
+            Json(json!({
+                "message": "Failed to fetch user data",
+                "error": err.to_string(),                     // optional: expose in dev only
+            })),
+        )
+            .into_response()
+    }
+}
+}
+
 
