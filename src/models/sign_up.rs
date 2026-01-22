@@ -18,6 +18,7 @@ pub struct Model {
      
     pub tracking_id: Option<String>,
     pub status: String,
+    pub role: String,
     pub agreement: bool,
 
     pub created_at: DateTime,

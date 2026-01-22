@@ -5,6 +5,7 @@ use axum::{
     routing::post
 };
 use rand::{distributions::Alphanumeric, Rng};
+use serde_json::json;
 use tracing::info;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use crate::models::sign_up::Entity as UserEntity;
@@ -42,18 +43,20 @@ pub async fn signup_handler(
         }
     };
 
-     let token: Option<String> = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(64)
-        .map(char::from)
-        .collect::<_>();
+    let token: String = rand::thread_rng()
+    .sample_iter(&Alphanumeric)
+    .take(64)
+    .map(char::from)
+    .collect();
+
     // Prepare new user ActiveModel
     let new_user = ActiveModel {
         full_name: sea_orm::ActiveValue::Set(payload.fullName),
         email: sea_orm::ActiveValue::Set(payload.email),
         phone_number: sea_orm::ActiveValue::Set(payload.phoneNumber),
         password_hash: sea_orm::ActiveValue::Set(hashed_password),
-        tracking_id: sea_orm::ActiveValue::Set(token),
+        tracking_id: sea_orm::ActiveValue::Set(Some(token)),
+        role: sea_orm::ActiveValue::Set("user".to_string()),
         status: sea_orm::ActiveValue::Set("Pending Approval".to_string()),
         agreement: sea_orm::ActiveValue::Set(payload.agreement),
         ..Default::default()
@@ -93,28 +96,59 @@ pub async fn login_handler(
 ) -> impl IntoResponse {
     info!("Login attempt for email: {}", payload.email);
 
-    // Find user by email
+    // 1️⃣ Find user by email
     let user = match UserEntity::find()
-    .filter(Column::Email.eq(payload.email))
-    .one(db.as_ref())
-    .await
-
+        .filter(Column::Email.eq(payload.email))
+        .one(db.as_ref())
+        .await
     {
         Ok(Some(u)) => u,
-        Ok(None) => return (axum::http::StatusCode::NOT_FOUND, "User not found").into_response(),
+        Ok(None) => {
+            return (
+                axum::http::StatusCode::NOT_FOUND,
+                Json(json!({ "message": "User not found" })),
+            )
+                .into_response();
+        }
         Err(e) => {
             info!("Error querying user: {}", e);
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Error processing request").into_response();
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "message": "Error processing request" })),
+            )
+                .into_response();
         }
     };
 
-    // Verify password
+    // 2️⃣ Verify password
     match verify_password(&payload.password, &user.password_hash) {
-        Ok(true) => (axum::http::StatusCode::OK, "Login successful").into_response(),
-        Ok(false) => (axum::http::StatusCode::UNAUTHORIZED, "Invalid credentials").into_response(),
+        Ok(true) => {
+             info!("Loaded tracking_id: {:?}", user.tracking_id);
+            (
+                axum::http::StatusCode::OK,
+                Json(json!({
+                    "message": "Login successful",
+                    "tracking_id": user.tracking_id
+                })),
+            )
+                .into_response()
+
+        }
+        Ok(false) => {
+            (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(json!({ "message": "Invalid credentials" })),
+            )
+                .into_response()
+        }
         Err(e) => {
             info!("Error verifying password: {}", e);
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Error processing request").into_response()
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "message": "Error processing request" })),
+            )
+                .into_response()
         }
     }
 }
+
