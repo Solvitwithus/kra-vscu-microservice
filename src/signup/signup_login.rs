@@ -4,6 +4,7 @@ use axum::{
     Json, Router, extract::State, response::IntoResponse,
     routing::post
 };
+use rand::{distributions::Alphanumeric, Rng};
 use tracing::info;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use crate::models::sign_up::Entity as UserEntity;
@@ -41,12 +42,19 @@ pub async fn signup_handler(
         }
     };
 
+     let token: Option<String> = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect::<_>();
     // Prepare new user ActiveModel
     let new_user = ActiveModel {
         full_name: sea_orm::ActiveValue::Set(payload.fullName),
         email: sea_orm::ActiveValue::Set(payload.email),
         phone_number: sea_orm::ActiveValue::Set(payload.phoneNumber),
         password_hash: sea_orm::ActiveValue::Set(hashed_password),
+        tracking_id: sea_orm::ActiveValue::Set(token),
+        status: sea_orm::ActiveValue::Set("Pending Approval".to_string()),
         agreement: sea_orm::ActiveValue::Set(payload.agreement),
         ..Default::default()
     };

@@ -26,6 +26,11 @@ impl MigrationTrait for Migration {
                     // Terms agreement
                     .col(boolean(User::Agreement).default(false))
 
+                    // Tracking ID
+                    .col(string(User::TrackingID).null())
+
+                    // Status
+                    .col(string(User::Status).default("Pending Approval"))
                     // Timestamps
                     .col(ColumnDef::new(User::CreatedAt).timestamp().default(Expr::current_timestamp()))
                     .col(ColumnDef::new(User::UpdatedAt).timestamp().default(Expr::current_timestamp()))
@@ -50,6 +55,8 @@ enum User {
     PhoneNumber,
     PasswordHash,
     Agreement,
+    TrackingID,
+    Status,
     CreatedAt,
     UpdatedAt,
 }

@@ -15,6 +15,9 @@ pub struct Model {
     /// bcrypt hashed password
     pub password_hash: String,
 
+     
+    pub tracking_id: Option<String>,
+    pub status: String,
     pub agreement: bool,
 
     pub created_at: DateTime,
