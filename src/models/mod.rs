@@ -4,3 +4,4 @@ pub mod branch_insurances;
 pub mod stock_master;
 pub mod product_save_items;
 pub mod sign_up;
+pub mod initialization;
