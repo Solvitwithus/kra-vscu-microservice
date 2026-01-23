@@ -4,17 +4,17 @@ use axum::{
     Json, Router, extract::State, response::IntoResponse,
     routing::post
 };
+use crate::utils::crypto::{ encrypt_deterministic};
 use serde::Deserialize;
 use rand::{distributions::Alphanumeric, Rng};
 use serde_json::json;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use crate::models::sign_up::{Entity as UserEntity, Model};
-use crate::models::sign_up::Entity;
-use crate::{
-    models::sign_up::{ActiveModel, Column},
-    types::signup::{LoginPayload, SignUpPayload}
+
+use crate::models::sign_up::{
+    ActiveModel, Column, Entity as UserEntity, Entity
 };
+use crate::types::signup::{LoginPayload, SignUpPayload};
 
 /// Register signup route
 pub fn sign_up(db: Arc<DatabaseConnection>) -> Router {
@@ -22,6 +22,7 @@ pub fn sign_up(db: Arc<DatabaseConnection>) -> Router {
         .route("/", post(signup_handler))
         .with_state(db)
 }
+
 pub fn log_in(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
         .route("/", post(login_handler))
@@ -34,29 +35,30 @@ pub fn log_in_users(db: Arc<DatabaseConnection>) -> Router {
         .with_state(db)
 }
 
-/// Signup handler
+/// --- Signup handler ---
 pub async fn signup_handler(
     State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<SignUpPayload>,
 ) -> impl IntoResponse {
     info!("Received signup payload: {:?}", payload);
 
-    // Hash the password
     let hashed_password = match hash_password(&payload.password) {
         Ok(h) => h,
         Err(e) => {
-            info!("Error hashing password: {}", e);
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Error processing request").into_response();
+            error!("Password hash error: {}", e);
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"message": "Error processing request"}))
+            ).into_response();
         }
     };
 
     let token: String = rand::thread_rng()
-    .sample_iter(&Alphanumeric)
-    .take(64)
-    .map(char::from)
-    .collect();
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
 
-    // Prepare new user ActiveModel
     let new_user = ActiveModel {
         full_name: sea_orm::ActiveValue::Set(payload.fullName),
         email: sea_orm::ActiveValue::Set(payload.email),
@@ -69,15 +71,20 @@ pub async fn signup_handler(
         ..Default::default()
     };
 
-    // Insert into DB
     match new_user.insert(db.as_ref()).await {
         Ok(user) => {
             info!("User created with ID: {:?}", user.id);
-            (axum::http::StatusCode::CREATED, "User created successfully").into_response()
+            (
+                axum::http::StatusCode::CREATED,
+                Json(json!({"message": "User created successfully"}))
+            ).into_response()
         }
         Err(e) => {
-            info!("Error creating user: {}", e);
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Error creating user").into_response()
+            error!("Error creating user: {}", e);
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"message": "Error creating user"}))
+            ).into_response()
         }
     }
 }
@@ -88,22 +95,17 @@ pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
 }
 
 /// Verify password
-pub fn verify_password(
-    password: &str,
-    hashed_password: &str,
-) -> Result<bool, bcrypt::BcryptError> {
+pub fn verify_password(password: &str, hashed_password: &str) -> Result<bool, bcrypt::BcryptError> {
     verify(password, hashed_password)
 }
 
-
-/// Login handler
+/// --- Login handler ---
 pub async fn login_handler(
     State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<LoginPayload>,
 ) -> impl IntoResponse {
     info!("Login attempt for email: {}", payload.email);
 
-    // 1️⃣ Find user by email
     let user = match UserEntity::find()
         .filter(Column::Email.eq(payload.email))
         .one(db.as_ref())
@@ -113,88 +115,81 @@ pub async fn login_handler(
         Ok(None) => {
             return (
                 axum::http::StatusCode::NOT_FOUND,
-                Json(json!({ "message": "User not found" })),
-            )
-                .into_response();
+                Json(json!({"message": "User not found"}))
+            ).into_response();
         }
         Err(e) => {
-            info!("Error querying user: {}", e);
+            error!("DB query error: {}", e);
             return (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "message": "Error processing request" })),
-            )
-                .into_response();
+                Json(json!({"message": "Error processing request"}))
+            ).into_response();
         }
     };
 
-    // 2️⃣ Verify password
     match verify_password(&payload.password, &user.password_hash) {
         Ok(true) => {
-             info!("Loaded tracking_id: {:?}", user.tracking_id);
+            let tracking_str = user.tracking_id.as_ref()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            let encrypted_track_token = encrypt_deterministic(&tracking_str);
+           
+
             (
                 axum::http::StatusCode::OK,
                 Json(json!({
-                    "message": "Login successful",
-                    "tracking_id": user.tracking_id
-                })),
-            )
-                .into_response()
-
+                    "message": "Login successfully",
+                    "tracking_id": encrypted_track_token,
+                    
+                }))
+            ).into_response()
         }
-        Ok(false) => {
-            (
-                axum::http::StatusCode::UNAUTHORIZED,
-                Json(json!({ "message": "Invalid credentials" })),
-            )
-                .into_response()
-        }
+        Ok(false) => (
+            axum::http::StatusCode::UNAUTHORIZED,
+            Json(json!({"message": "Invalid credentials"}))
+        ).into_response(),
         Err(e) => {
-            info!("Error verifying password: {}", e);
+            error!("Password verify error: {}", e);
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "message": "Error processing request" })),
-            )
-                .into_response()
+                Json(json!({"message": "Error processing request"}))
+            ).into_response()
         }
     }
+
+    
 }
 
+/// --- Fetch users by tracking_id ---
 #[derive(Deserialize)]
 pub struct UserFetch {
-    pub tracing_id: String,
+    pub tracking_id: String,
 }
 
 pub async fn login_handler_fetch(
     State(db): State<Arc<DatabaseConnection>>,
     Json(data): Json<UserFetch>,
 ) -> impl IntoResponse {
-    info!("Login fetch via POST for tracing_id: {}", data.tracing_id);
+    info!("Fetching users for tracking_id: {}", data.tracking_id);
 
-  match Entity::find()
-    .filter(Column::TrackingId.eq(data.tracing_id))
-    .all(db.as_ref())
-    .await
-{
-    Ok(users) => {
-        info!("Fetched users: {:?}", users);
-        (
+    match Entity::find()
+        .filter(Column::TrackingId.eq(data.tracking_id))
+        .all(db.as_ref())
+        .await
+    {
+        Ok(users) => (
             axum::http::StatusCode::OK,
-            Json(json!({ "users": users })),
-        )
-            .into_response()
-    }
-    Err(err) => {
-        error!("DB error fetching user by tracking_id {err}");
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,   // ← change to 500
-            Json(json!({
-                "message": "Failed to fetch user data",
-                "error": err.to_string(),                     // optional: expose in dev only
-            })),
-        )
-            .into_response()
+            Json(json!({ "users": users }))
+        ).into_response(),
+        Err(err) => {
+            error!("DB error fetching user: {}", err);
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "message": "Failed to fetch user data",
+                    "error": err.to_string()
+                }))
+            ).into_response()
+        }
     }
 }
-}
-
-

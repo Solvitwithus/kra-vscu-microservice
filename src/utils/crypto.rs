@@ -1,64 +1,139 @@
 use aes_gcm::{
-    Aes256Gcm, Key, Nonce,
     aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Key as AesGcmKey, Nonce,
 };
-use base64::{engine::general_purpose, Engine};
+use aes_gcm_siv::{
+    aead::{Aead as SivAead, KeyInit as SivKeyInit},
+    Aes256GcmSiv, Nonce as SivNonce,
+};
+use base64::{engine::general_purpose, Engine as _};
 use rand::RngCore;
 use std::env;
 
-/// Encrypt a value using AES-256-GCM
-pub fn encrypt(value: &str) -> String {
-    // Read key from env at runtime
-    let key_str = env::var("ENCRYPTION_KEY")
-        .expect("ENCRYPTION_KEY must be set and 32 bytes long");
-    
-    let key_bytes = key_str.as_bytes();
-    assert_eq!(key_bytes.len(), 32, "ENCRYPTION_KEY must be 32 bytes");
+/// === AES-256-GCM (random nonce) - for general encryption ===
+/// Produces different output every time (even for same input)
 
-    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
+/// Encrypt using AES-256-GCM with random nonce
+pub fn encrypt(value: &str) -> String {
+    let key_str = env::var("ENCRYPTION_KEY_NON_DETERMINISTIC")
+        .expect("ENCRYPTION_KEY environment variable must be set");
+
+    let key_bytes = key_str.as_bytes();
+    if key_bytes.len() != 32 {
+        panic!("ENCRYPTION_KEY must be exactly 32 bytes long");
+    }
+
+    let key = AesGcmKey::<Aes256Gcm>::from_slice(key_bytes);
     let cipher = Aes256Gcm::new(key);
 
-    // Random 12-byte nonce
+    // Generate random 12-byte nonce
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    // Encrypt
     let ciphertext = cipher
         .encrypt(nonce, value.as_bytes())
-        .expect("encryption failure");
+        .expect("AES-GCM encryption failed");
 
-    // Combine nonce + ciphertext
+    // Prepend nonce → (nonce || ciphertext)
     let mut result = nonce_bytes.to_vec();
-    result.extend(ciphertext);
+    result.extend_from_slice(&ciphertext);
 
-    // Encode to base64
     general_purpose::STANDARD.encode(result)
 }
 
-/// Decrypt a value using AES-256-GCM
+/// Decrypt AES-256-GCM ciphertext (expects nonce prepended)
 pub fn decrypt(encoded: &str) -> String {
-    // Read key from env at runtime
-    let key_str = env::var("ENCRYPTION_KEY")
-        .expect("ENCRYPTION_KEY must be set and 32 bytes long");
-    
-    let key_bytes = key_str.as_bytes();
-    assert_eq!(key_bytes.len(), 32, "ENCRYPTION_KEY must be 32 bytes");
+    let key_str = env::var("ENCRYPTION_KEY_NON_DETERMINISTIC")
+        .expect("ENCRYPTION_KEY environment variable must be set");
 
-    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
+    let key_bytes = key_str.as_bytes();
+    if key_bytes.len() != 32 {
+        panic!("ENCRYPTION_KEY must be exactly 32 bytes long");
+    }
+
+    let key = AesGcmKey::<Aes256Gcm>::from_slice(key_bytes);
     let cipher = Aes256Gcm::new(key);
 
-    // Decode base64
-    let decoded = general_purpose::STANDARD.decode(encoded)
-        .expect("base64 decode failed");
+    let decoded = general_purpose::STANDARD
+        .decode(encoded)
+        .expect("Base64 decode failed");
 
-    // Split nonce and ciphertext
-    let (nonce_bytes, cipher_text) = decoded.split_at(12);
+    if decoded.len() < 12 {
+        panic!("Invalid ciphertext: too short");
+    }
+
+    let (nonce_bytes, ciphertext) = decoded.split_at(12);
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    // Decrypt
-    let plaintext = cipher.decrypt(nonce, cipher_text)
-        .expect("decryption failure");
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .expect("AES-GCM decryption failed");
 
-    String::from_utf8(plaintext).expect("utf8 decode failure")
+    String::from_utf8(plaintext).expect("Invalid UTF-8 after decryption")
+}
+
+/// === AES-256-GCM-SIV (deterministic / nonce-misuse-resistant) ===
+/// Same plaintext → always same ciphertext
+/// Ideal for database uniqueness constraints, searchable encryption, deduplication
+
+type DeterministicCipher = Aes256GcmSiv;
+
+/// Encrypt using AES-256-GCM-SIV (deterministic)
+pub fn encrypt_deterministic(value: &str) -> String {
+    let key_str = env::var("ENCRYPTION_KEY")
+        .expect("ENCRYPTION_KEY environment variable must be set");
+
+    // Assuming ENCRYPTION_KEY is **base64-encoded** 32-byte key
+    // If it's raw bytes or hex, change decoding accordingly
+    let key_bytes = general_purpose::STANDARD
+        .decode(&key_str)
+        .expect("ENCRYPTION_KEY must be valid base64 (32 bytes after decode)");
+
+    if key_bytes.len() != 32 {
+        panic!("ENCRYPTION_KEY must decode to exactly 32 bytes");
+    }
+
+    let key = aes_gcm_siv::Key::<DeterministicCipher>::from_slice(&key_bytes);
+    let cipher = DeterministicCipher::new(key);
+
+    // Nonce is ignored in deterministic usage of GCM-SIV
+    // We use all-zero nonce (common convention)
+    let nonce = SivNonce::from_slice(&[0u8; 12]);
+
+    let ciphertext = cipher
+        .encrypt(nonce, value.as_bytes())
+        .expect("AES-GCM-SIV encryption failed");
+
+    // No need to store nonce → just the ciphertext + tag
+    general_purpose::STANDARD.encode(ciphertext)
+}
+
+/// Decrypt AES-256-GCM-SIV deterministic ciphertext
+pub fn decrypt_deterministic(encoded: &str) -> String {
+    let key_str = env::var("ENCRYPTION_KEY")
+        .expect("ENCRYPTION_KEY environment variable must be set");
+
+    let key_bytes = general_purpose::STANDARD
+        .decode(&key_str)
+        .expect("ENCRYPTION_KEY must be valid base64 (32 bytes after decode)");
+
+    if key_bytes.len() != 32 {
+        panic!("ENCRYPTION_KEY must decode to exactly 32 bytes");
+    }
+
+    let key = aes_gcm_siv::Key::<DeterministicCipher>::from_slice(&key_bytes);
+    let cipher = DeterministicCipher::new(key);
+
+    let decoded = general_purpose::STANDARD
+        .decode(encoded)
+        .expect("Base64 decode failed");
+
+    let nonce = SivNonce::from_slice(&[0u8; 12]);
+
+   let plaintext = cipher
+    .decrypt(nonce, decoded.as_slice())   // & [u8]
+    .expect("...");
+
+    String::from_utf8(plaintext).expect("Invalid UTF-8 after decryption")
 }

@@ -18,7 +18,7 @@ use tracing::info;
 use crate::{
     models::initialization::{
         ActiveModel, Column, Entity as Credentials
-    }, types::initializeTypes::InitializeData, utils::crypto::encrypt
+    }, types::initializeTypes::InitializeData, utils::crypto::{encrypt, encrypt_deterministic}
 };
 
 pub fn initialization_route(db: Arc<DatabaseConnection>) -> Router {
@@ -31,63 +31,57 @@ pub async fn initialize_system(
     State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<InitializeData>,
 ) -> impl IntoResponse {
-
     info!("Starting initialization");
 
-    // 1️⃣ Check if device serial already exists
-    match Credentials::find()
-        .filter(Column::DeviceSerial.eq(&payload.deviceSerial))
+    // 🔹 Deterministic encryption for fields used in uniqueness checks
+    let encrypted_serial = encrypt_deterministic(&payload.deviceSerial);
+    let encrypted_pin = encrypt_deterministic(&payload.pin);
+
+    // 🔹 1. Check device serial uniqueness
+    if let Ok(Some(_)) = Credentials::find()
+        .filter(Column::DeviceSerial.eq(&encrypted_serial))
         .one(db.as_ref())
         .await
     {
-        Ok(Some(_)) => {
-            return Json(json!({"status": "error", "message": "Device serial number already exists"}))
-        },
-        Err(e) => {
-            return Json(json!({"status": "error", "message": e.to_string()}))
-        },
-        _ => {}
+        return Json(json!({
+            "status": "error",
+            "message": "Device serial number already exists"
+        }));
     }
 
-    // 2️⃣ Check if PIN exists in this environment
-    match Credentials::find()
-        .filter(Column::Pin.eq(&payload.pin))
+    // 🔹 2. Check PIN uniqueness in this environment
+    if let Ok(Some(_)) = Credentials::find()
+        .filter(Column::Pin.eq(&encrypted_pin))
         .filter(Column::EnvironmentName.eq(&payload.environmentName))
         .one(db.as_ref())
         .await
     {
-        Ok(Some(_)) => {
-            return Json(json!({"status": "error", "message": "PIN already exists in this environment"}))
-        },
-        Err(e) => {
-            return Json(json!({"status": "error", "message": e.to_string()}))
-        },
-        _ => {}
+        return Json(json!({
+            "status": "error",
+            "message": "PIN already exists in this environment"
+        }));
     }
 
-    // 3️⃣ Generate API key
+    // 🔹 3. Generate API key and encrypt other fields
     let api_key: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(64)
         .map(char::from)
         .collect();
 
-    // 4️⃣ Encrypt PIN (raw or hashed)
-    let encrypted_pin = encrypt(&payload.pin);
-    let encrypted_serial = encrypt(&payload.deviceSerial);
-    let encrypted_id = encrypt(&payload.branchId);
-    let encrypted_comp_id = encrypt(&payload.companyId);
-    let encrypted_key= encrypt(&api_key);
+    let encrypted_api_key = encrypt(&api_key);
+    let encrypted_branch = encrypt(&payload.branchId);
+    let encrypted_company = encrypt(&payload.companyId);
 
-    // 5️⃣ Insert device
+    // 🔹 4. Insert
     let device = ActiveModel {
-        company_id: sea_orm::ActiveValue::Set(encrypted_comp_id),
+        company_id: sea_orm::ActiveValue::Set(encrypted_company),
         environment_name: sea_orm::ActiveValue::Set(payload.environmentName),
         environment_url: sea_orm::ActiveValue::Set(payload.environmentUrl),
         pin: sea_orm::ActiveValue::Set(encrypted_pin),
-        branch_id: sea_orm::ActiveValue::Set(encrypted_id),
+        branch_id: sea_orm::ActiveValue::Set(encrypted_branch),
         device_serial: sea_orm::ActiveValue::Set(encrypted_serial),
-        api_key: sea_orm::ActiveValue::Set(encrypted_key),
+        api_key: sea_orm::ActiveValue::Set(encrypted_api_key),
         ..Default::default()
     };
 
@@ -96,13 +90,21 @@ pub async fn initialize_system(
             "status": "success",
             "data": {
                 "id": res.id,
-                "api_key": api_key // return generated API key
+                "api_key": api_key
             }
         })),
-        Err(e) => Json(json!({
-            "status": "error",
-            "message": e.to_string()
-        })),
+        Err(e) => {
+            // 🔹 Catch DB UNIQUE violation (race condition)
+            if e.to_string().contains("uniq_device_serial") {
+                return Json(json!({
+                    "status": "error",
+                    "message": "Device serial number already exists (DB constraint)"
+                }));
+            }
+            Json(json!({
+                "status": "error",
+                "message": e.to_string()
+            }))
+        }
     }
 }
-

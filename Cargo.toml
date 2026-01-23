@@ -28,3 +28,4 @@ chrono = { version = "0.4", features = ["serde"] }
 aes-gcm = "0.10"
 rand = "0.8"
 base64 = "0.21"
+aes-gcm-siv = "0.11"
