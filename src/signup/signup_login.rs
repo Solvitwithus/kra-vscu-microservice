@@ -4,7 +4,7 @@ use axum::{
     Json, Router, extract::State, response::IntoResponse,
     routing::post
 };
-use crate::utils::crypto::{ encrypt_deterministic};
+use crate::utils::crypto::{ decrypt_deterministic, encrypt_deterministic};
 use serde::Deserialize;
 use rand::{distributions::Alphanumeric, Rng};
 use serde_json::json;
@@ -156,8 +156,6 @@ pub async fn login_handler(
             ).into_response()
         }
     }
-
-    
 }
 
 /// --- Fetch users by tracking_id ---
@@ -170,25 +168,32 @@ pub async fn login_handler_fetch(
     State(db): State<Arc<DatabaseConnection>>,
     Json(data): Json<UserFetch>,
 ) -> impl IntoResponse {
-    info!("Fetching users for tracking_id: {}", data.tracking_id);
+    info!("Fetching users for encrypted tracking_id: {}", data.tracking_id);
 
-    match Entity::find()
-        .filter(Column::TrackingId.eq(data.tracking_id))
+    // decrypt_deterministic returns String directly, not Result
+    let decrypted_tracking_id = decrypt_deterministic(&data.tracking_id);
+
+    info!("Encrypted input : {}", data.tracking_id);
+    info!("Decrypted output: '{}'", decrypted_tracking_id);
+    info!("Decrypted length: {}", decrypted_tracking_id.len());
+
+    match UserEntity::find()
+        .filter(Column::TrackingId.eq(&decrypted_tracking_id))
         .all(db.as_ref())
         .await
     {
-        Ok(users) => (
-            axum::http::StatusCode::OK,
-            Json(json!({ "users": users }))
-        ).into_response(),
+        Ok(users) => {
+            info!("Found {} users", users.len());
+            (
+                axum::http::StatusCode::OK,
+                Json(json!({ "users": users }))
+            ).into_response()
+        }
         Err(err) => {
-            error!("DB error fetching user: {}", err);
+            error!("DB error: {}", err);
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "message": "Failed to fetch user data",
-                    "error": err.to_string()
-                }))
+                Json(json!({"message": "Failed to fetch user data", "error": err.to_string()}))
             ).into_response()
         }
     }
