@@ -29,3 +29,5 @@ aes-gcm = "0.10"
 rand = "0.8"
 base64 = "0.21"
 aes-gcm-siv = "0.11"
+headers = "0.4"
+axum-extra = { version = "0.9", features = ["typed-header"] }
