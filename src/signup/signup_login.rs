@@ -7,7 +7,7 @@ use axum::{
 use crate::utils::crypto::{ decrypt_deterministic, encrypt_deterministic};
 use serde::Deserialize;
 use rand::{distributions::Alphanumeric, Rng};
-use serde_json::json;
+use serde_json::{Value, json};
 use tracing::{error, info};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
@@ -140,6 +140,7 @@ pub async fn login_handler(
                 Json(json!({
                     "message": "Login successfully",
                     "tracking_id": encrypted_track_token,
+                
                     
                 }))
             ).into_response()
@@ -170,7 +171,6 @@ pub async fn login_handler_fetch(
 ) -> impl IntoResponse {
     info!("Fetching users for encrypted tracking_id: {}", data.tracking_id);
 
-    // decrypt_deterministic returns String directly, not Result
     let decrypted_tracking_id = decrypt_deterministic(&data.tracking_id);
 
     info!("Encrypted input : {}", data.tracking_id);
@@ -179,22 +179,45 @@ pub async fn login_handler_fetch(
 
     match UserEntity::find()
         .filter(Column::TrackingId.eq(&decrypted_tracking_id))
-        .all(db.as_ref())
+        .one(db.as_ref())
         .await
     {
-        Ok(users) => {
-            info!("Found {} users", users.len());
+        Ok(Some(user)) => {
+            info!("User found: {}", user.email);
+
             (
                 axum::http::StatusCode::OK,
-                Json(json!({ "users": users }))
-            ).into_response()
+                Json(json!({
+                    "message": "success",
+                    "email": user.email,
+                    "username": user.full_name,
+                    "role": user.role,
+                    "id": user.tracking_id
+                }))
+            )
         }
+
+        Ok(None) => {
+            info!("No user found for tracking_id");
+
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                Json(json!({
+                    "message": "User not found"
+                }))
+            )
+        }
+
         Err(err) => {
             error!("DB error: {}", err);
+
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"message": "Failed to fetch user data", "error": err.to_string()}))
-            ).into_response()
+                Json(json!({
+                    "message": "Failed to fetch user data",
+                    "error": err.to_string()
+                }))
+            )
         }
     }
 }
