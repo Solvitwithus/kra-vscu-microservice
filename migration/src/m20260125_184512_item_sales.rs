@@ -22,10 +22,10 @@ impl MigrationTrait for Migration {
                     // === INVOICE CORE ===
                     .col(string(Sales::Tin))
                     .col(string(Sales::BhfId))
-                    .col(big_integer(Sales::TrdInvcNo))
+                    .col(big_integer_null(Sales::TrdInvcNo))
 
-                    .col(big_integer(Sales::InvcNo))
-                    .col(big_integer(Sales::OrgInvcNo))
+                    .col(big_integer_null(Sales::InvcNo))
+                    .col(big_integer_null(Sales::OrgInvcNo))
 
                     .col(string(Sales::CustTin))
                     .col(string(Sales::CustNm))
@@ -45,29 +45,29 @@ impl MigrationTrait for Migration {
                     .col(string_null(Sales::RfdRsnCd))
 
                     // === TOTALS ===
-                    .col(integer(Sales::TotItemCnt))
+                    .col(integer_null(Sales::TotItemCnt))
 
-                    .col(double(Sales::TaxblAmtA))
-                    .col(double(Sales::TaxblAmtB))
-                    .col(double(Sales::TaxblAmtC))
-                    .col(double(Sales::TaxblAmtD))
-                    .col(double(Sales::TaxblAmtE))
+                    .col(double_null(Sales::TaxblAmtA))
+                    .col(double_null(Sales::TaxblAmtB))
+                    .col(double_null(Sales::TaxblAmtC))
+                    .col(double_null(Sales::TaxblAmtD))
+                    .col(double_null(Sales::TaxblAmtE))
 
-                    .col(double(Sales::TaxRtA))
-                    .col(double(Sales::TaxRtB))
-                    .col(double(Sales::TaxRtC))
-                    .col(double(Sales::TaxRtD))
-                    .col(double(Sales::TaxRtE))
+                    .col(double_null(Sales::TaxRtA))
+                    .col(double_null(Sales::TaxRtB))
+                    .col(double_null(Sales::TaxRtC))
+                    .col(double_null(Sales::TaxRtD))
+                    .col(double_null(Sales::TaxRtE))
 
-                    .col(double(Sales::TaxAmtA))
-                    .col(double(Sales::TaxAmtB))
-                    .col(double(Sales::TaxAmtC))
-                    .col(double(Sales::TaxAmtD))
-                    .col(double(Sales::TaxAmtE))
+                    .col(double_null(Sales::TaxAmtA))
+                    .col(double_null(Sales::TaxAmtB))
+                    .col(double_null(Sales::TaxAmtC))
+                    .col(double_null(Sales::TaxAmtD))
+                    .col(double_null(Sales::TaxAmtE))
 
-                    .col(double(Sales::TotTaxblAmt))
-                    .col(double(Sales::TotTaxAmt))
-                    .col(double(Sales::TotAmt))
+                    .col(double_null(Sales::TotTaxblAmt))
+                    .col(double_null(Sales::TotTaxAmt))
+                    .col(double_null(Sales::TotAmt))
 
                     // === FLAGS ===
                     .col(string(Sales::PrchrAcptcYn))
