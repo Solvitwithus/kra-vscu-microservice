@@ -5,3 +5,4 @@ pub mod stock_master;
 pub mod product_save_items;
 pub mod sign_up;
 pub mod initialization;
+pub mod sales_uploads;

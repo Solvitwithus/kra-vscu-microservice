@@ -11,6 +11,7 @@ mod m20260120_133135_product_save_items;
 mod m20260121_190839_sign_up;
 
 mod m20260123_093316_device_credentials;
+mod m20260125_184512_item_sales;
 
 
 pub struct Migrator;
@@ -25,8 +26,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260119_194639_stock_master::Migration),
             Box::new(m20260120_133135_product_save_items::Migration),
             Box::new(m20260121_190839_sign_up::Migration),
-           
             Box::new(m20260123_093316_device_credentials::Migration),
+            Box::new(m20260125_184512_item_sales::Migration),
         ]
     }
 }

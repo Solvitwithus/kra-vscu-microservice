@@ -121,8 +121,7 @@ pub struct TrnsSalesSaveResData {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum InvoicePayload {
-    Single(TrnsSalesSaveWrReq),
-    Multiple(Vec<TrnsSalesSaveWrReq>),
-}
+
+
+
+pub struct InvoicePayload(pub Vec<TrnsSalesSaveWrReq>);

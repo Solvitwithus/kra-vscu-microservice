@@ -10,11 +10,10 @@ use axum::{
 use axum_extra::extract::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 use sea_orm::DatabaseConnection;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
-use crate::utils::bearer::bearer_resolver;
+use crate::{types::salespayloadtype::{InvoicePayload, TrnsSalesSaveWrReq}, utils::{bearer::bearer_resolver, crypto::decrypt_deterministic}};
 
 pub fn sales_route(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
@@ -22,24 +21,19 @@ pub fn sales_route(db: Arc<DatabaseConnection>) -> Router {
         .with_state(db)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct MyData {
-    pub name: String,
-    pub age: String,
-    pub item_name: String,
-}
+
 
 
 pub async fn handle_payload_post(
     TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
     State(db): State<Arc<DatabaseConnection>>,
-    Json(payload): Json<MyData>,
+    Json(payload): Json<InvoicePayload>,
 ) -> impl IntoResponse {
     let token = auth.token();
     info!("Bearer token received");
     info!("Payload: {:?}", payload);
 
-    match bearer_resolver(token, db.as_ref()).await {
+    let data = match bearer_resolver(token, db.as_ref()).await {
         Ok(user) => Json(json!({
             "status": "success",
             "data": {
@@ -51,5 +45,10 @@ pub async fn handle_payload_post(
             "status": "error",
             "message": err
         })),
+    };
+    let tin = data.user.tin;
+      let items: Vec<TrnsSalesSaveWrReq> = payload.0;
+    for item in items.iter(){
+
     }
 }
