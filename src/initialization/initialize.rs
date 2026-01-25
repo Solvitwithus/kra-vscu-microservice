@@ -69,7 +69,7 @@ pub async fn initialize_system(
         .map(char::from)
         .collect();
 
-    let encrypted_api_key = encrypt(&api_key);
+    
     let encrypted_branch = encrypt(&payload.branchId);
     let encrypted_company = encrypt(&payload.companyId);
 
@@ -81,7 +81,7 @@ pub async fn initialize_system(
         pin: sea_orm::ActiveValue::Set(encrypted_pin),
         branch_id: sea_orm::ActiveValue::Set(encrypted_branch),
         device_serial: sea_orm::ActiveValue::Set(encrypted_serial),
-        api_key: sea_orm::ActiveValue::Set(encrypted_api_key),
+        api_key: sea_orm::ActiveValue::Set(api_key),
         ..Default::default()
     };
 
@@ -89,9 +89,10 @@ pub async fn initialize_system(
         Ok(res) => Json(json!({
             "status": "success",
             "data": {
-                "id": res.id,
-                "api_key": api_key
-            }
+                
+                "api_key": res.api_key
+            },
+         
         })),
         Err(e) => {
             // 🔹 Catch DB UNIQUE violation (race condition)
