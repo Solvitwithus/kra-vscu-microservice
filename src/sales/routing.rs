@@ -10,7 +10,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnectio
 use serde_json::json;
 use tracing::{info, error};
 use reqwest;
-
+use chrono::Utc;
 use crate::{
     models::sales_uploads::{ActiveModel, Column, Entity},
     types::salespayloadtype::{InvoicePayload,AuthUser},
@@ -187,7 +187,7 @@ pub async fn handle_payload_post(
     info!("Successfully inserted {} invoices. Starting KRA transmission...", inserted_ids.len());
 
     // 6️⃣ TRANSMIT TO KRA ENDPOINT
-    for id in inserted_ids {
+for id in inserted_ids {
         // Fetch the record we just inserted
         let record = match Entity::find_by_id(id).one(db.as_ref()).await {
             Ok(Some(r)) => r,
@@ -201,9 +201,9 @@ pub async fn handle_payload_post(
             }
         };
 
-        // Update status to TRANSMITTING
-        if let Err(e) = update_status(db.as_ref(), id, "TRANSMITTING").await {
-            error!("Failed to update status to TRANSMITTING for ID {}: {}", id, e);
+        // Update status to PROCESSING (lock)
+        if let Err(e) = update_status(db.as_ref(), id, "PROCESSING").await {
+            error!("Failed to update status to PROCESSING for ID {}: {}", id, e);
             continue;
         }
 
@@ -212,7 +212,7 @@ pub async fn handle_payload_post(
             Ok(t) => t,
             Err(e) => {
                 error!("Failed to decrypt TIN for record {}: {}", id, e);
-                update_status(db.as_ref(), id, "FAILED").await.ok();
+                mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
                 continue;
             }
         };
@@ -221,7 +221,7 @@ pub async fn handle_payload_post(
             Ok(b) => b,
             Err(e) => {
                 error!("Failed to decrypt BHF_ID for record {}: {}", id, e);
-                update_status(db.as_ref(), id, "FAILED").await.ok();
+                mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
                 continue;
             }
         };
@@ -246,7 +246,6 @@ pub async fn handle_payload_post(
             "cnclDt": record.cncl_dt,
             "rfdDt": record.rfd_dt,
             "rfdRsnCd": record.rfd_rsn_cd,
-
             "totItemCnt": record.tot_item_cnt,
             "taxblAmtA": record.taxbl_amt_a,
             "taxblAmtB": record.taxbl_amt_b,
@@ -278,8 +277,12 @@ pub async fn handle_payload_post(
 
         info!("Sending payload to KRA for invoice #{}", record.invc_no);
 
-        // Send to KRA endpoint
-        let client = reqwest::Client::new();
+        // Send to KRA endpoint with timeout
+        let client = reqwest::Client::builder()
+            .timeout(tokio::time::Duration::from_secs(30))
+            .build()
+            .unwrap();
+
         match client
             .post("http://192.168.1.71:8088/trnsSales/saveSales")
             .json(&kra_payload)
@@ -287,6 +290,12 @@ pub async fn handle_payload_post(
             .await
         {
             Ok(response) => {
+                if !response.status().is_success() {
+                    error!("KRA returned error status: {} for record {}", response.status(), id);
+                    mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
+                    continue;
+                }
+
                 match response.json::<serde_json::Value>().await {
                     Ok(kra_response) => {
                         info!("Received response from KRA for invoice #{}", record.invc_no);
@@ -303,13 +312,13 @@ pub async fn handle_payload_post(
                     }
                     Err(e) => {
                         error!("Failed to parse KRA response for record {}: {}", id, e);
-                        update_status(db.as_ref(), id, "FAILED").await.ok();
+                        mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
                     }
                 }
             }
             Err(e) => {
                 error!("Failed to send to KRA endpoint for record {}: {}", id, e);
-                update_status(db.as_ref(), id, "FAILED").await.ok();
+                mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
             }
         }
     }
@@ -366,5 +375,35 @@ async fn update_record_with_response(
     active_model.update(db).await?;
 
     info!("Updated record {} with KRA response and status {}", id, new_status);
+    Ok(())
+}
+
+
+
+// Add this new helper function
+async fn mark_as_failed_with_retry(
+    db: &DatabaseConnection,
+    id: i32,
+    current_retry_count: i64,
+) -> Result<(), sea_orm::DbErr> {
+    use sea_orm::ActiveValue::Set;
+    use chrono::Duration as ChronoDuration;
+
+    let record = Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .ok_or(sea_orm::DbErr::RecordNotFound(format!("ID {}", id)))?;
+
+    // Calculate next retry time with exponential backoff
+    let backoff_minutes = 2_i64.pow((current_retry_count + 1) as u32);
+    let next_retry = Utc::now() + ChronoDuration::minutes(backoff_minutes);
+
+    let mut active_model: ActiveModel = record.into();
+    active_model.status = Set("FAILED".to_string());
+    active_model.retry_count = Set(current_retry_count);
+    active_model.next_retry_at = Set(next_retry.to_rfc3339());
+    active_model.update(db).await?;
+
+    info!("Marked record {} as FAILED, will retry at {}", id, next_retry.format("%Y-%m-%d %H:%M:%S"));
     Ok(())
 }

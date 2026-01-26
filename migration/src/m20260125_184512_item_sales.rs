@@ -74,6 +74,12 @@ impl MigrationTrait for Migration {
                     .col(double_null(Sales::TotTaxblAmt))
                     .col(double_null(Sales::TotTaxAmt))
                     .col(double_null(Sales::TotAmt))
+                       .col( ColumnDef::new(Sales::Retry_count)
+        .big_integer() 
+        .not_null()
+        .default(Expr::value(Value::Int(Some(0)))),
+)
+                    .col(double_null(Sales::Next_retry_at))
 
                     // === FLAGS ===
                     .col(string(Sales::PrchrAcptcYn))
@@ -150,7 +156,8 @@ enum Sales {
     TaxRtC,
     TaxRtD,
     TaxRtE,
-
+Retry_count,
+Next_retry_at,
     TaxAmtA,
     TaxAmtB,
     TaxAmtC,

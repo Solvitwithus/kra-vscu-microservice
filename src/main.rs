@@ -8,7 +8,7 @@ use reqwest::Method;
 mod utils;
 // use sales::routing::route_sales;
 use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
-use crate::{initialization::initialize::initialization_route, product_management::items_save_items::items_save_items_router, sales::routing::sales_route, signup::signup_login::{log_in, log_in_users, sign_up}, stock_management::route_stock_master::master_router};
+use crate::{initialization::initialize::initialization_route, product_management::items_save_items::items_save_items_router, sales::routing::sales_route, signup::signup_login::{log_in, log_in_users, sign_up}, stock_management::route_stock_master::master_router, utils::polling_retry_worker::{self, start_retry_worker}};
 mod product_management;
 mod types;
 use axum::{Router, serve};
@@ -56,7 +56,9 @@ let db = Arc::new(Database::connect(&database_url).await?);
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
         );
-    
+        // Start the retry worker
+    polling_retry_worker::start_retry_worker(db.clone());
+
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     let listener = TcpListener::bind(addr).await?;
 
