@@ -8,36 +8,20 @@ use axum_extra::extract::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, TransactionTrait};
 use serde_json::json;
-use tracing::{info, warn, error};
+use tracing::{info, error};
 use reqwest;
 
 use crate::{
-    models::sales_uploads::{ActiveModel, Column, Entity, Model},
-    types::salespayloadtype::{InvoicePayload, TrnsSalesSaveWrReq},
+    models::sales_uploads::{ActiveModel, Column, Entity},
+    types::salespayloadtype::{InvoicePayload,AuthUser},
     utils::{bearer::bearer_resolver, crypto::decrypt_deterministic},
 };
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
-struct AuthUser {
-    api_key: String,
-    branch_id: String,
-    company_id: String,
-    device_serial: String,
-    environment_name: String,
-    environment_url: String,
-    id: i32,
-    pin: String,
-}
 
-// Response structure from KRA endpoint
-#[derive(Debug, Deserialize, Serialize)]
-struct KraResponse {
-    // Add fields based on actual KRA response
-    // For now using generic Value
-    #[serde(flatten)]
-    data: serde_json::Value,
-}
+
+
+
+
 
 pub fn sales_route(db: Arc<DatabaseConnection>) -> Router {
     Router::new()

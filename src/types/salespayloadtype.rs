@@ -126,3 +126,23 @@ pub struct TrnsSalesSaveResData {
 
 
 pub struct InvoicePayload(pub Vec<TrnsSalesSaveWrReq>);
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AuthUser {
+    pub api_key: String,
+    pub branch_id: String,
+    pub company_id: String,
+    pub device_serial: String,
+   pub environment_name: String,
+   pub environment_url: String,
+   pub id: i32,
+   pub pin: String,
+}
+
+// Response structure from KRA endpoint
+#[derive(Debug, Deserialize, Serialize)]
+pub struct KraResponse {
+    // Add fields based on actual KRA response
+    // For now using generic Value
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}

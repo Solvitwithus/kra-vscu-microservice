@@ -20,7 +20,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tokio::net::TcpListener;
 mod models;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{ EnvFilter};
 use tracing_appender::rolling;
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
