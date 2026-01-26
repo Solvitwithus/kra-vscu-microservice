@@ -1,3 +1,4 @@
+
 use std::sync::Arc;
 
 use axum::{
@@ -261,6 +262,7 @@ pub async fn handle_payload_post(
             "cnclDt": record.cncl_dt,
             "rfdDt": record.rfd_dt,
             "rfdRsnCd": record.rfd_rsn_cd,
+
             "totItemCnt": record.tot_item_cnt,
             "taxblAmtA": record.taxbl_amt_a,
             "taxblAmtB": record.taxbl_amt_b,

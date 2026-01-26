@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 mod sales;
 mod branch_operations;
 mod signup;
