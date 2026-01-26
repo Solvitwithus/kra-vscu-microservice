@@ -7,14 +7,15 @@ use axum_extra::extract::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, TransactionTrait};
 use serde_json::json;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
+use reqwest;
 
 use crate::{
-    models::sales_uploads::{ActiveModel, Column, Entity},
+    models::sales_uploads::{ActiveModel, Column, Entity, Model},
     types::salespayloadtype::{InvoicePayload, TrnsSalesSaveWrReq},
-    utils::bearer::bearer_resolver,
+    utils::{bearer::bearer_resolver, crypto::decrypt_deterministic},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 struct AuthUser {
@@ -26,6 +27,15 @@ struct AuthUser {
     environment_url: String,
     id: i32,
     pin: String,
+}
+
+// Response structure from KRA endpoint
+#[derive(Debug, Deserialize, Serialize)]
+struct KraResponse {
+    // Add fields based on actual KRA response
+    // For now using generic Value
+    #[serde(flatten)]
+    data: serde_json::Value,
 }
 
 pub fn sales_route(db: Arc<DatabaseConnection>) -> Router {
@@ -73,9 +83,9 @@ pub async fn handle_payload_post(
         }
     };
 
-    // 3️⃣ FETCH LAST INVOICE NUMBER FOR THIS API KEY (OUTSIDE THE LOOP)
+    // 3️⃣ FETCH LAST INVOICE NUMBER FOR THIS API KEY
     let last_sale = match Entity::find()
-        .filter(Column::ApiKey.eq(token))  // ✅ Filter by API key, not bhf_id
+        .filter(Column::ApiKey.eq(token))
         .order_by_desc(Column::GeneratedInvcNo)
         .one(db.as_ref())
         .await 
@@ -90,31 +100,28 @@ pub async fn handle_payload_post(
         }
     };
 
-    // Determine starting invoice number for this API key
     let mut current_invoice_number = if let Some(record) = last_sale {
         record.generated_invc_no
     } else {
-        0  // Start at 0, will increment to 1 for first invoice
+        0
     };
+
+    let mut inserted_ids: Vec<i32> = Vec::new();
 
     // 4️⃣ INSERT PAYLOAD - INCREMENT FOR EACH ITEM
     for item in payload.0.iter() {
-        // Increment invoice number for each item
         current_invoice_number += 1;
 
         let model = ActiveModel {
             api_key: Set(token.to_string()),
             status: Set("RECEIVED".to_string()),
 
-            // ✅ Generated from authenticated user
             tin: Set(user.pin.clone()),
             bhf_id: Set(user.branch_id.clone()),
             
-            // ✅ Use incremented invoice number
             generated_invc_no: Set(current_invoice_number),
             invc_no: Set(current_invoice_number),
             
-            // Payload fields
             trd_invc_no: Set(item.trdInvcNo),
             org_invc_no: Set(item.orgInvcNo),
 
@@ -163,36 +170,215 @@ pub async fn handle_payload_post(
 
             receipt: Set(serde_json::to_value(&item.receipt).unwrap()),
             item_list: Set(serde_json::to_value(&item.itemList).unwrap()),
-            response: Set(Some(serde_json::to_value(&item.itemList).unwrap())),
+            response: Set(None), // Will be set after KRA call
 
             ..Default::default()
         };
 
-        if let Err(e) = model.insert(&txn).await {
-            let _ = txn.rollback().await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "message": format!("Insert failed: {e}") })),
-            );
+        match model.insert(&txn).await {
+            Ok(inserted) => {
+                inserted_ids.push(inserted.id);
+                info!("Inserted invoice #{} with ID {} for api_key: {}", 
+                      current_invoice_number, inserted.id, token);
+            }
+            Err(e) => {
+                let _ = txn.rollback().await;
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "message": format!("Insert failed: {e}") })),
+                );
+            }
         }
-
-        info!("Inserted invoice #{} for api_key: {}", current_invoice_number, token);
     }
 
-    // 5️⃣ COMMIT
-    match txn.commit().await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(json!({
-                "message": "success",
-                "resultMsg": "Sales uploaded successfully",
-                "invoices_created": payload.0.len(),
-                "last_invoice_number": current_invoice_number
-            })),
-        ),
-        Err(e) => (
+    // 5️⃣ COMMIT TRANSACTION
+    if let Err(e) = txn.commit().await {
+        return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "message": format!("Commit failed: {e}") })),
-        ),
+        );
     }
+
+    info!("Successfully inserted {} invoices. Starting KRA transmission...", inserted_ids.len());
+
+    // 6️⃣ TRANSMIT TO KRA ENDPOINT
+    for id in inserted_ids {
+        // Fetch the record we just inserted
+        let record = match Entity::find_by_id(id).one(db.as_ref()).await {
+            Ok(Some(r)) => r,
+            Ok(None) => {
+                error!("Record with ID {} not found after insert", id);
+                continue;
+            }
+            Err(e) => {
+                error!("Failed to fetch record {}: {}", id, e);
+                continue;
+            }
+        };
+
+        // Update status to TRANSMITTING
+        if let Err(e) = update_status(db.as_ref(), id, "TRANSMITTING").await {
+            error!("Failed to update status to TRANSMITTING for ID {}: {}", id, e);
+            continue;
+        }
+
+        // Decrypt TIN and BHF_ID
+        let decrypted_tin = match decrypt_deterministic(&record.tin) {
+            Ok(t) => t,
+            Err(e) => {
+                error!("Failed to decrypt TIN for record {}: {}", id, e);
+                update_status(db.as_ref(), id, "FAILED").await.ok();
+                continue;
+            }
+        };
+
+        let decrypted_bhf_id = match decrypt_deterministic(&record.bhf_id) {
+            Ok(b) => b,
+            Err(e) => {
+                error!("Failed to decrypt BHF_ID for record {}: {}", id, e);
+                update_status(db.as_ref(), id, "FAILED").await.ok();
+                continue;
+            }
+        };
+
+        // Build KRA payload
+        let kra_payload = json!({
+            "tin": decrypted_tin,
+            "bhfId": decrypted_bhf_id,
+            "trdInvcNo": record.trd_invc_no,
+            "invcNo": record.invc_no,
+            "orgInvcNo": record.org_invc_no,
+            "custTin": record.cust_tin,
+            "custNm": record.cust_nm,
+            "salesTyCd": record.sales_ty_cd,
+            "rcptTyCd": record.rcpt_ty_cd,
+            "pmtTyCd": record.pmt_ty_cd,
+            "salesSttsCd": record.sales_stts_cd,
+            "cfmDt": record.cfm_dt,
+            "salesDt": record.sales_dt,
+            "stockRlsDt": record.stock_rls_dt,
+            "cnclReqDt": record.cncl_req_dt,
+            "cnclDt": record.cncl_dt,
+            "rfdDt": record.rfd_dt,
+            "rfdRsnCd": record.rfd_rsn_cd,
+            "totItemCnt": record.tot_item_cnt,
+            "taxblAmtA": record.taxbl_amt_a,
+            "taxblAmtB": record.taxbl_amt_b,
+            "taxblAmtC": record.taxbl_amt_c,
+            "taxblAmtD": record.taxbl_amt_d,
+            "taxblAmtE": record.taxbl_amt_e,
+            "taxRtA": record.tax_rt_a,
+            "taxRtB": record.tax_rt_b,
+            "taxRtC": record.tax_rt_c,
+            "taxRtD": record.tax_rt_d,
+            "taxRtE": record.tax_rt_e,
+            "taxAmtA": record.tax_amt_a,
+            "taxAmtB": record.tax_amt_b,
+            "taxAmtC": record.tax_amt_c,
+            "taxAmtD": record.tax_amt_d,
+            "taxAmtE": record.tax_amt_e,
+            "totTaxblAmt": record.tot_taxbl_amt,
+            "totTaxAmt": record.tot_tax_amt,
+            "totAmt": record.tot_amt,
+            "prchrAcptcYn": record.prchr_acptc_yn,
+            "remark": record.remark,
+            "regrId": record.regr_id,
+            "regrNm": record.regr_nm,
+            "modrId": record.modr_id,
+            "modrNm": record.modr_nm,
+            "receipt": record.receipt,
+            "itemList": record.item_list,
+        });
+
+        info!("Sending payload to KRA for invoice #{}", record.invc_no);
+
+        // Send to KRA endpoint
+        let client = reqwest::Client::new();
+        match client
+            .post("http://192.168.1.71:8088/trnsSales/saveSales")
+            .json(&kra_payload)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                match response.json::<serde_json::Value>().await {
+                    Ok(kra_response) => {
+                        info!("Received response from KRA for invoice #{}", record.invc_no);
+                        
+                        // Update record with response and status
+                        if let Err(e) = update_record_with_response(
+                            db.as_ref(),
+                            id,
+                            kra_response,
+                            "TRANSMITTED"
+                        ).await {
+                            error!("Failed to update record {} with KRA response: {}", id, e);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to parse KRA response for record {}: {}", id, e);
+                        update_status(db.as_ref(), id, "FAILED").await.ok();
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to send to KRA endpoint for record {}: {}", id, e);
+                update_status(db.as_ref(), id, "FAILED").await.ok();
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "message": "success",
+            "resultMsg": "Sales uploaded and transmitted successfully",
+            "invoices_created": payload.0.len(),
+            "last_invoice_number": current_invoice_number
+        })),
+    )
+}
+
+// Helper function to update status
+async fn update_status(
+    db: &DatabaseConnection,
+    id: i32,
+    new_status: &str,
+) -> Result<(), sea_orm::DbErr> {
+    use sea_orm::ActiveValue::Set;
+    
+    let record = Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .ok_or(sea_orm::DbErr::RecordNotFound(format!("ID {}", id)))?;
+
+    let mut active_model: ActiveModel = record.into();
+    active_model.status = Set(new_status.to_string());
+    active_model.update(db).await?;
+
+    info!("Updated record {} status to {}", id, new_status);
+    Ok(())
+}
+
+// Helper function to update record with KRA response
+async fn update_record_with_response(
+    db: &DatabaseConnection,
+    id: i32,
+    kra_response: serde_json::Value,
+    new_status: &str,
+) -> Result<(), sea_orm::DbErr> {
+    use sea_orm::ActiveValue::Set;
+    
+    let record = Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .ok_or(sea_orm::DbErr::RecordNotFound(format!("ID {}", id)))?;
+
+    let mut active_model: ActiveModel = record.into();
+    active_model.status = Set(new_status.to_string());
+    active_model.response = Set(Some(kra_response));
+    active_model.update(db).await?;
+
+    info!("Updated record {} with KRA response and status {}", id, new_status);
+    Ok(())
 }
