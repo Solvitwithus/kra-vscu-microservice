@@ -15,6 +15,12 @@ impl MigrationTrait for Migration {
 
                     // === AUTH / META ===
                     .col(string(Sales::ApiKey))
+                    .col(
+    ColumnDef::new(Sales::Generated_invc_no)
+        .big_integer() 
+        .not_null()
+        .default(Expr::value(Value::Int(Some(0)))),
+)
                     .col(string(Sales::Status))
                     .col(timestamp(Sales::CreatedAt).default(Expr::current_timestamp()))
                     .col(timestamp_null(Sales::UpdatedAt))
@@ -81,6 +87,7 @@ impl MigrationTrait for Migration {
                     // === NESTED JSON ===
                     .col(json_binary(Sales::Receipt))
                     .col(json_binary(Sales::ItemList))
+                    .col(json_binary(Sales::Response))
 
                     .to_owned(),
             )
@@ -102,6 +109,7 @@ enum Sales {
     // meta
     ApiKey,
     Status,
+    Generated_invc_no,
     CreatedAt,
     UpdatedAt,
 
@@ -163,4 +171,5 @@ enum Sales {
 
     Receipt,
     ItemList,
+    Response,
 }

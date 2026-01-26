@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrnsSalesSaveWrReq {
-    pub tin: String,
-    pub bhfId: String,
+    pub tin: Option<String>,
+    pub bhfId: Option<String>,
     pub trdInvcNo: i64,
-
-    pub invcNo: i64,
+pub generated_invc_no:Option<i64>,
+    pub invcNo: Option<i64>,
     pub orgInvcNo: i64,
 
     pub custTin: String,
@@ -60,6 +60,7 @@ pub struct TrnsSalesSaveWrReq {
 
     pub receipt: ReceiptInfo,
     pub itemList: Vec<TrnsSalesSaveWrItem>,
+    pub response: Option<Vec<TrnsSalesSaveWrRes>>
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReceiptInfo {

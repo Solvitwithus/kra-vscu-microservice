@@ -11,7 +11,7 @@ pub struct Model {
     // ===== META / AUTH =====
     pub api_key: String,
     pub status: String,
-
+pub generated_invc_no:i64,
     pub created_at: DateTime,
     pub updated_at: Option<DateTime>,
 
@@ -77,6 +77,7 @@ pub struct Model {
     // ===== NESTED PAYLOADS =====
     pub receipt: Json,
     pub item_list: Json,
+    pub response:Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -5,12 +5,12 @@ use axum::{
 };
 use axum_extra::extract::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseConnection, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, TransactionTrait};
 use serde_json::json;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
-    models::sales_uploads::ActiveModel,
+    models::sales_uploads::{ActiveModel, Column, Entity},
     types::salespayloadtype::{InvoicePayload, TrnsSalesSaveWrReq},
     utils::bearer::bearer_resolver,
 };
@@ -73,8 +73,35 @@ pub async fn handle_payload_post(
         }
     };
 
-    // 3️⃣ INSERT PAYLOAD
+    // 3️⃣ FETCH LAST INVOICE NUMBER FOR THIS API KEY (OUTSIDE THE LOOP)
+    let last_sale = match Entity::find()
+        .filter(Column::ApiKey.eq(token))  // ✅ Filter by API key, not bhf_id
+        .order_by_desc(Column::GeneratedInvcNo)
+        .one(db.as_ref())
+        .await 
+    {
+        Ok(val) => val,
+        Err(err) => {
+            let _ = txn.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "message": format!("Failed to fetch last sale: {err}") })),
+            );
+        }
+    };
+
+    // Determine starting invoice number for this API key
+    let mut current_invoice_number = if let Some(record) = last_sale {
+        record.generated_invc_no
+    } else {
+        0  // Start at 0, will increment to 1 for first invoice
+    };
+
+    // 4️⃣ INSERT PAYLOAD - INCREMENT FOR EACH ITEM
     for item in payload.0.iter() {
+        // Increment invoice number for each item
+        current_invoice_number += 1;
+
         let model = ActiveModel {
             api_key: Set(token.to_string()),
             status: Set("RECEIVED".to_string()),
@@ -83,9 +110,12 @@ pub async fn handle_payload_post(
             tin: Set(user.pin.clone()),
             bhf_id: Set(user.branch_id.clone()),
             
+            // ✅ Use incremented invoice number
+            generated_invc_no: Set(current_invoice_number),
+            invc_no: Set(current_invoice_number),
+            
             // Payload fields
             trd_invc_no: Set(item.trdInvcNo),
-            invc_no: Set(item.invcNo),
             org_invc_no: Set(item.orgInvcNo),
 
             cust_tin: Set(item.custTin.clone()),
@@ -133,6 +163,7 @@ pub async fn handle_payload_post(
 
             receipt: Set(serde_json::to_value(&item.receipt).unwrap()),
             item_list: Set(serde_json::to_value(&item.itemList).unwrap()),
+            response: Set(Some(serde_json::to_value(&item.itemList).unwrap())),
 
             ..Default::default()
         };
@@ -144,15 +175,19 @@ pub async fn handle_payload_post(
                 Json(json!({ "message": format!("Insert failed: {e}") })),
             );
         }
+
+        info!("Inserted invoice #{} for api_key: {}", current_invoice_number, token);
     }
 
-    // 4️⃣ COMMIT
+    // 5️⃣ COMMIT
     match txn.commit().await {
         Ok(_) => (
             StatusCode::OK,
             Json(json!({
-                "resultCd": "000",
-                "resultMsg": "Sales uploaded successfully"
+                "message": "success",
+                "resultMsg": "Sales uploaded successfully",
+                "invoices_created": payload.0.len(),
+                "last_invoice_number": current_invoice_number
             })),
         ),
         Err(e) => (

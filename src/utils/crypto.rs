@@ -109,31 +109,52 @@ pub fn encrypt_deterministic(value: &str) -> String {
     general_purpose::STANDARD.encode(ciphertext)
 }
 
-/// Decrypt AES-256-GCM-SIV deterministic ciphertext
-pub fn decrypt_deterministic(encoded: &str) -> String {
-    let key_str = env::var("ENCRYPTION_KEY")
-        .expect("ENCRYPTION_KEY environment variable must be set");
 
+/// Decrypt AES-256-GCM-SIV deterministic ciphertext
+pub fn decrypt_deterministic(encoded: &str) -> Result<String, String> {
+    let key_str = env::var("ENCRYPTION_KEY")
+        .map_err(|_| "ENCRYPTION_KEY environment variable must be set")?;
+    
     let key_bytes = general_purpose::STANDARD
         .decode(&key_str)
-        .expect("ENCRYPTION_KEY must be valid base64 (32 bytes after decode)");
-
+        .map_err(|e| format!("ENCRYPTION_KEY must be valid base64: {}", e))?;
+    
     if key_bytes.len() != 32 {
-        panic!("ENCRYPTION_KEY must decode to exactly 32 bytes");
+        return Err(format!("ENCRYPTION_KEY must decode to exactly 32 bytes, got {}", key_bytes.len()));
     }
-
+    
     let key = aes_gcm_siv::Key::<DeterministicCipher>::from_slice(&key_bytes);
     let cipher = DeterministicCipher::new(key);
-
+    
     let decoded = general_purpose::STANDARD
         .decode(encoded)
-        .expect("Base64 decode failed");
-
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
+    
+    // GCM-SIV adds a 16-byte authentication tag
+    if decoded.len() < 16 {
+        return Err(format!("Ciphertext too short: {} bytes (minimum 16)", decoded.len()));
+    }
+    
     let nonce = SivNonce::from_slice(&[0u8; 12]);
-
-   let plaintext = cipher
-    .decrypt(nonce, decoded.as_slice())   // & [u8]
-    .expect("...");
-
-    String::from_utf8(plaintext).expect("Invalid UTF-8 after decryption")
+    
+    let plaintext = cipher
+        .decrypt(nonce, decoded.as_slice())
+        .map_err(|e| format!("AES-GCM-SIV decryption failed: {:?}. This usually means wrong key or corrupted data.", e))?;
+    
+    String::from_utf8(plaintext)
+        .map_err(|e| format!("Invalid UTF-8 after decryption: {}", e))
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
