@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     let database_url = env::var("DATABASE_URL")?;
     // let db = Database::connect(&database_url).await?;
 let db = Arc::new(Database::connect(&database_url).await?);
-
+   polling_retry_worker::start_retry_worker(db.clone());
     
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -57,7 +57,7 @@ let db = Arc::new(Database::connect(&database_url).await?);
             tower_http::trace::TraceLayer::new_for_http()
         );
         // Start the retry worker
-    polling_retry_worker::start_retry_worker(db.clone());
+ 
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     let listener = TcpListener::bind(addr).await?;
