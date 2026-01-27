@@ -176,7 +176,7 @@ pub async fn handle_payload_post(
         }
     }
 
-    // 5️⃣ COMMIT TRANSACTION
+    // 5️⃣ COMMIT TRANSACTION in a wierd syntax
     if let Err(e) = txn.commit().await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
