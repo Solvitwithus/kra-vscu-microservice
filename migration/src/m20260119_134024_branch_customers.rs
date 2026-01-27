@@ -18,6 +18,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
+                    
                     .col(ColumnDef::new(BhfCustomer::Tin).string_len(11).not_null())
                     .col(ColumnDef::new(BhfCustomer::BhfId).string_len(2).not_null())
                     .col(ColumnDef::new(BhfCustomer::CustNo).string_len(9).not_null())
