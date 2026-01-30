@@ -1,22 +1,48 @@
 use std::sync::Arc;
 
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
+use axum_extra::TypedHeader;
+use headers::{Authorization, authorization::Bearer};
 use reqwest::StatusCode;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseConnection, EntityTrait, TransactionTrait};
 use serde_json::json;
+use tracing::info;
 
-use crate::{models::product_save_items::{ActiveModel, Entity}, stock_management::route_stock_master::error_response, types::product_management_payload_types::ItemSaveReq};
+use crate::{models::product_save_items::{ActiveModel, Entity}, stock_management::route_stock_master::error_response, types::{product_management_payload_types::ItemSaveReq, salespayloadtype::AuthUser}, utils::bearer::bearer_resolver};
 
 pub fn items_save_items_router(db: Arc<DatabaseConnection>) -> Router {
     Router::new()
-        .route("/", post(save_item).get(get_items))
+        .route("/", post(save_item))
         .with_state(db)
 }
 
 async fn save_item(
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
     State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<ItemSaveReq>,
 ) -> impl IntoResponse {
+
+       let token = auth.token();
+    info!("Bearer token received");
+
+    // 1️⃣ AUTH FIRST
+    let user: AuthUser = match bearer_resolver(token, db.as_ref()).await {
+        Ok(val) => match serde_json::from_value(val) {
+            Ok(u) => u,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "message": format!("Failed to parse user: {}", e) })),
+                )
+            }
+        },
+        Err(e) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "message": e })),
+            )
+        }
+    };
     // Handler logic here
     let items = payload.0;
     let mut txn = match db.begin().await {
@@ -26,8 +52,8 @@ async fn save_item(
 
     for  item in items {
         let model = ActiveModel{
-            tin: Set(item.tin),
-            bhf_id: Set(item.bhf_id),
+            tin: Set(Some(user.pin.clone())),
+            bhf_id: Set(Some(user.branch_id.clone())),
   item_cd: Set(item.item_cd.clone()),
     item_cls_cd: Set(item.item_cls_cd),
     item_ty_cd: Set(item.item_ty_cd),
@@ -78,17 +104,3 @@ match txn.commit().await {
     }
 }
 
-async fn get_items(
-    State(db): State<Arc<DatabaseConnection>>,
-) -> impl IntoResponse {
-    match Entity::find().all(db.as_ref()).await {
-        Ok(items) => (
-            StatusCode::OK,
-            Json(json!({
-                "status": "success",
-                "data": items
-            })),
-        ),
-        Err(e) => return error_response(&format!("Failed to fetch items: {e}"), StatusCode::INTERNAL_SERVER_ERROR),
-    }
-}

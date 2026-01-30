@@ -11,8 +11,9 @@ pub struct ItemSaveReq (pub Vec<Item>);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
     // Required
-    pub tin: String,          // CHARY11
-    pub bhf_id: String,       // CHARY2
+    pub tin: Option<String> ,          // CHARY11
+    pub bhf_id: Option<String>,       // CHARY2
+    pub status: String,
     pub item_cd: String,      // CHARY20
     pub item_cls_cd: String,  // CHARY10
     pub item_ty_cd: String,   // CHARY5

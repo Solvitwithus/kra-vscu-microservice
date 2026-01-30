@@ -14,8 +14,9 @@ impl MigrationTrait for Migration {
                     .col(pk_auto(ItemMaster::Id))
 
                     // Required
-                    .col(string_len(ItemMaster::Tin, 11).not_null())
-                    .col(string_len(ItemMaster::BhfId, 2).not_null())
+                    .col(string_len(ItemMaster::Tin, 11))
+                    .col(string_len(ItemMaster::BhfId, 2))
+                    .col(string(ItemMaster::Status))
                     .col(string_len(ItemMaster::ItemCd, 20).not_null())
                     .col(string_len(ItemMaster::ItemClsCd, 10).not_null())
                     .col(string_len(ItemMaster::ItemTyCd, 5).not_null())
@@ -85,6 +86,7 @@ enum ItemMaster {
     Id,
     Tin,
     BhfId,
+    Status,
     ItemCd,
     ItemClsCd,
     ItemTyCd,
