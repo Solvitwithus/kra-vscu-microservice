@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::extract::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait};
 use serde_json::json;
 use tracing::{info, error};
 use reqwest;
@@ -68,22 +68,30 @@ pub async fn handle_payload_post(
         }
     };
 
+    // first get to fetch the entire records with api if none start from 0
+
     // 3️⃣ FETCH LAST INVOICE NUMBER FOR THIS API KEY
-    let last_sale = match Entity::find()
-        .filter(Column::ApiKey.eq(token))
-        .order_by_desc(Column::GeneratedInvcNo)
-        .one(db.as_ref())
-        .await 
-    {
-        Ok(val) => val,
-        Err(err) => {
-            let _ = txn.rollback().await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "message": format!("Failed to fetch last sale: {err}") })),
-            );
-        }
-    };
+   let last_sale = match Entity::find()
+    .filter(Column::ApiKey.eq(token.clone()))
+    .order_by_desc(Column::GeneratedInvcNo)
+    .limit(1)
+    .all(db.as_ref())
+    .await
+{
+    Ok(mut rows) => rows.pop(),
+    Err(err) => {
+        let _ = txn.rollback().await;
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "message": format!("Failed to fetch last sale: {err}")
+            })),
+        );
+    }
+};
+
+
+   
 
     let mut current_invoice_number = if let Some(record) = last_sale {
         record.generated_invc_no
@@ -400,8 +408,8 @@ async fn mark_as_failed_with_retry(
 
     let mut active_model: ActiveModel = record.into();
     active_model.status = Set("FAILED".to_string());
-    active_model.retry_count = Set(current_retry_count);
-    active_model.next_retry_at = Set(next_retry.to_rfc3339());
+    active_model.retry_count = Set(Some(current_retry_count));
+    active_model.next_retry_at = Set(Some(next_retry.to_rfc3339()));
     active_model.update(db).await?;
 
     info!("Marked record {} as FAILED, will retry at {}", id, next_retry.format("%Y-%m-%d %H:%M:%S"));

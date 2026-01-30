@@ -47,12 +47,25 @@ async fn retry_failed_transactions(
         let id = record.id;
         
         // Check if it's time to retry (exponential backoff)
-        if !record.next_retry_at.is_empty() && record.next_retry_at > now {
-            info!("⏰ Record {} not ready for retry yet (next: {})", id, record.next_retry_at);
-            continue;
-        }
+      if let Some(next_retry_at) = &record.next_retry_at {
+    if next_retry_at > &now {
+        info!(
+            "⏰ Record {} not ready for retry yet (next: {})",
+            id, next_retry_at
+        );
+        continue;
+    }
+}
 
-        info!("🔄 Retrying record {} (attempt {}/5)", id, record.retry_count + 1);
+
+        let retry_count = record.retry_count.unwrap_or(0);
+
+info!(
+    "🔄 Retrying record {} (attempt {}/5)",
+    id,
+    retry_count + 1
+);
+
 
         // 1️⃣ Lock the record with PROCESSING status
         if let Err(e) = update_status(db, id, "PROCESSING").await {
@@ -72,13 +85,15 @@ async fn retry_failed_transactions(
             Ok(false) => {
                 // Failed - increment retry count with exponential backoff
                 info!("❌ Failed to transmit record {}, will retry later", id);
-                if let Err(e) = increment_retry(db, id, record.retry_count).await {
+                if let Err(e) = increment_retry(db, id, record.retry_count.unwrap_or(0)).await
+ {
                     error!("Failed to increment retry for {}: {}", id, e);
                 }
             }
             Err(e) => {
                 error!("Error during retry of record {}: {}", id, e);
-                if let Err(e) = increment_retry(db, id, record.retry_count).await {
+                if let Err(e) = increment_retry(db, id, record.retry_count.unwrap_or(0)).await
+{
                     error!("Failed to increment retry for {}: {}", id, e);
                 }
             }
@@ -220,7 +235,8 @@ async fn update_record_with_response(
     let mut active_model: ActiveModel = record.into();
     active_model.status = Set(new_status.to_string());
     active_model.response = Set(Some(kra_response));
-    active_model.next_retry_at = Set(String::new()); // Clear retry timestamp
+    active_model.next_retry_at = Set(None);
+ // Clear retry timestamp
     active_model.update(db).await?;
 
     info!("✅ Updated record {} with KRA response and status {}", id, new_status);
@@ -247,10 +263,21 @@ async fn increment_retry(
     let backoff_minutes = 2_i64.pow(new_retry_count as u32);
     let next_retry = Utc::now() + ChronoDuration::minutes(backoff_minutes);
 
+
+
+    // Entity::update_many()
+    // .col_expr(Column::RetryCount, Expr::value(new_retry_count))
+    // .col_expr(Column::Status, Expr::value("FAILED"))
+    // .col_expr(Column::NextRetryAt, Expr::value(next_retry))
+    // .filter(Column::Id.eq(record.id))
+    // .exec(db)
+    // .await?;
+
+
     let mut model: ActiveModel = record.into();
-    model.retry_count = Set(new_retry_count);
+    model.retry_count = Set(Some(new_retry_count));
     model.status = Set("FAILED".to_string());
-    model.next_retry_at = Set(next_retry.to_rfc3339());
+    model.next_retry_at = Set(Some(next_retry.to_rfc3339()));
     model.update(db).await?;
 
     info!("📊 Record {} retry count: {}/5, next retry at: {}", 

@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     let database_url = env::var("DATABASE_URL")?;
     // let db = Database::connect(&database_url).await?;
 let db = Arc::new(Database::connect(&database_url).await?);
-   polling_retry_worker::start_retry_worker(db.clone());
+//    polling_retry_worker::start_retry_worker(db.clone());
     
     let cors = CorsLayer::new()
         .allow_origin(Any)

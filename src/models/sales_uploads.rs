@@ -18,9 +18,9 @@ pub generated_invc_no:i64,
     // ===== INVOICE CORE =====
     pub tin: String,
     pub bhf_id: String,
-    pub trd_invc_no: i32,
-pub retry_count:i64,
-pub next_retry_at:String,
+    pub trd_invc_no: Option<i32>,
+pub retry_count: Option<i64>,
+pub next_retry_at: Option<String>,
     pub invc_no: i64,
     pub org_invc_no: i64,
 

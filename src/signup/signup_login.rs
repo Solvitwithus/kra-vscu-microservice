@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
+use base64::{Engine, engine::general_purpose};
 use bcrypt::{DEFAULT_COST, hash, verify};
 use axum::{
     Json, Router, extract::State, response::{IntoResponse, Response},
@@ -148,13 +149,30 @@ pub async fn login_handler(
         return Err(AuthError::InvalidCredentials);
     }
 
-    // Encrypt tracking ID for response
+    // Get tracking ID
     let tracking_str = user.tracking_id
         .as_ref()
         .map(|s| s.to_string())
         .unwrap_or_default();
-
+    
+    info!("Original tracking_id: {}", tracking_str);
+    
+    // DEBUG: Check encryption key before encrypting
+    match env::var("ENCRYPTION_KEY") {
+        Ok(key) => {
+            info!("ENCRYPTION_KEY at login:");
+            info!("  - Length: {} chars", key.len());
+            info!("  - First 10 chars: {}", &key.chars().take(10).collect::<String>());
+        }
+        Err(_) => error!("✗ ENCRYPTION_KEY not set at login!"),
+    }
+    
+    // Encrypt tracking ID for response
     let encrypted_tracking_id = encrypt_deterministic(&tracking_str);
+    
+    info!("Encrypted tracking_id:");
+    info!("  - Length: {} chars", encrypted_tracking_id.len());
+    info!("  - First 20 chars: {}", &encrypted_tracking_id.chars().take(20).collect::<String>());
 
     info!("User logged in successfully: {}", payload.email);
 
@@ -178,11 +196,52 @@ pub async fn login_handler_fetch(
     Json(data): Json<UserFetch>,
 ) -> Result<Response, AuthError> {
     info!("Fetching user with encrypted tracking_id");
-
-    // Decrypt tracking ID
+    
+    // DEBUG 1: Check if environment variable is set
+    let key_check = env::var("ENCRYPTION_KEY");
+    match &key_check {
+        Ok(key) => {
+            info!("✓ ENCRYPTION_KEY is set");
+            info!("  - Key length (base64): {} chars", key.len());
+            info!("  - Key first 10 chars: {}", &key.chars().take(10).collect::<String>());
+            
+            // Try to decode it
+            match general_purpose::STANDARD.decode(key) {
+                Ok(decoded) => info!("  - Decoded key length: {} bytes (expected: 32)", decoded.len()),
+                Err(e) => error!("  - ✗ Key is NOT valid base64: {}", e),
+            }
+        }
+        Err(e) => {
+            error!("✗ ENCRYPTION_KEY is NOT set: {}", e);
+            return Err(AuthError::DecryptionError("ENCRYPTION_KEY not set".to_string()));
+        }
+    }
+    
+    // DEBUG 2: Check the incoming data
+    info!("Received encrypted tracking_id:");
+    info!("  - Length: {} chars", data.tracking_id.len());
+    info!("  - First 20 chars: {}", &data.tracking_id.chars().take(20).collect::<String>());
+    
+    // Try to decode the tracking_id as base64
+    match general_purpose::STANDARD.decode(&data.tracking_id) {
+        Ok(decoded) => info!("  - Decoded ciphertext length: {} bytes", decoded.len()),
+        Err(e) => {
+            error!("  - ✗ Tracking ID is NOT valid base64: {}", e);
+            return Err(AuthError::DecryptionError("Invalid base64 tracking_id".to_string()));
+        }
+    }
+    
+    // DEBUG 3: Attempt decryption with detailed error
+    info!("Attempting decryption...");
     let decrypted_tracking_id = decrypt_deterministic(&data.tracking_id)
-        .map_err(AuthError::DecryptionError)?;
-
+        .map_err(|e| {
+            error!("✗ Decryption failed: {}", e);
+            AuthError::DecryptionError(e)
+        })?;
+    
+    info!("✓ Decryption successful!");
+    info!("  - Decrypted value: {}", decrypted_tracking_id);
+    
     // Find user by decrypted tracking ID
     let user = UserEntity::find()
         .filter(Column::TrackingId.eq(&decrypted_tracking_id))

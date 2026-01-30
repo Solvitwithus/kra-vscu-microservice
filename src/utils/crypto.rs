@@ -8,6 +8,7 @@ use aes_gcm_siv::{
 };
 use base64::{engine::general_purpose, Engine as _};
 use rand::RngCore;
+use tracing::info;
 use std::env;
 
 /// === AES-256-GCM (random nonce) - for general encryption ===
@@ -112,6 +113,7 @@ pub fn encrypt_deterministic(value: &str) -> String {
 
 /// Decrypt AES-256-GCM-SIV deterministic ciphertext
 pub fn decrypt_deterministic(encoded: &str) -> Result<String, String> {
+    info!("Starting the decryption phase!");
     let key_str = env::var("ENCRYPTION_KEY")
         .map_err(|_| "ENCRYPTION_KEY environment variable must be set")?;
     

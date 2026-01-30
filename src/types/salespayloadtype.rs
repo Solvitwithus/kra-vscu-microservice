@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct TrnsSalesSaveWrReq {
     pub tin: Option<String>,
     pub bhfId: Option<String>,
-    pub trdInvcNo: i32,
+    pub trdInvcNo: Option<i32>,
 pub generated_invc_no:Option<i64>,
     pub invcNo: Option<i64>,
     pub orgInvcNo: i64,
@@ -13,8 +13,9 @@ pub generated_invc_no:Option<i64>,
     pub custNm: String,
 
 
-    pub retry_count:i64,
-pub next_retry_at:String,
+   
+pub retry_count:Option<i64>,
+pub next_retry_at:Option<String>,
     pub salesTyCd: String,
     pub rcptTyCd: String,
     pub pmtTyCd: String,

@@ -28,7 +28,7 @@ impl MigrationTrait for Migration {
                     // === INVOICE CORE ===
                     .col(string(Sales::Tin))
                     .col(string(Sales::BhfId))
-                    .col(big_integer_null(Sales::TrdInvcNo))
+                    .col(integer_null(Sales::TrdInvcNo))
 
                     .col(big_integer_null(Sales::InvcNo))
                     .col(big_integer_null(Sales::OrgInvcNo))
@@ -74,12 +74,12 @@ impl MigrationTrait for Migration {
                     .col(double_null(Sales::TotTaxblAmt))
                     .col(double_null(Sales::TotTaxAmt))
                     .col(double_null(Sales::TotAmt))
-                       .col( ColumnDef::new(Sales::Retry_count)
+                       .col( ColumnDef::new(Sales::RetryCount)
         .big_integer() 
         .not_null()
         .default(Expr::value(Value::Int(Some(0)))),
 )
-                    .col(double_null(Sales::Next_retry_at))
+                    .col(double_null(Sales::NextRetryAt))
 
                     // === FLAGS ===
                     .col(string(Sales::PrchrAcptcYn))
@@ -93,7 +93,7 @@ impl MigrationTrait for Migration {
                     // === NESTED JSON ===
                     .col(json_binary(Sales::Receipt))
                     .col(json_binary(Sales::ItemList))
-                    .col(json_binary(Sales::Response))
+                    .col(json_binary_null(Sales::Response))
 
                     .to_owned(),
             )
@@ -156,8 +156,8 @@ enum Sales {
     TaxRtC,
     TaxRtD,
     TaxRtE,
-Retry_count,
-Next_retry_at,
+RetryCount,
+NextRetryAt,
     TaxAmtA,
     TaxAmtB,
     TaxAmtC,
