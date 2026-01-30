@@ -48,7 +48,7 @@ let db = Arc::new(Database::connect(&database_url).await?);
         .nest("/product/items_select", items_save_items_router(db.clone()))
         .nest("/signup", sign_up(db.clone()))
         .nest("/login", log_in(db.clone()))
-        .nest("/login_users", log_in_users(db.clone()))
+        .nest("/map_users", log_in_users(db.clone()))
         .nest("/initialize", initialization_route(db.clone()))
         .nest("/sales",sales_route(db.clone()))
         .layer(cors)
