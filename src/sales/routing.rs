@@ -13,8 +13,8 @@ use reqwest;
 use chrono::Utc;
 use crate::{
     models::sales_uploads::{ActiveModel, Column, Entity},
-    types::salespayloadtype::{InvoicePayload,AuthUser},
-    utils::{bearer::bearer_resolver, crypto::decrypt_deterministic},
+    types::salespayloadtype::{AuthUser, InvoicePayload},
+    utils::{bearer::bearer_resolver, crypto::{decrypt, decrypt_deterministic}},
 };
 
 
@@ -198,7 +198,10 @@ pub async fn handle_payload_post(
 for id in inserted_ids {
         // Fetch the record we just inserted
         let record = match Entity::find_by_id(id).one(db.as_ref()).await {
-            Ok(Some(r)) => r,
+            Ok(Some(r)) => {
+        println!("records: {:?}", r);
+        r
+    },
             Ok(None) => {
                 error!("Record with ID {} not found after insert", id);
                 continue;
@@ -209,31 +212,57 @@ for id in inserted_ids {
             }
         };
 
+
         // Update status to PROCESSING (lock)
         if let Err(e) = update_status(db.as_ref(), id, "PROCESSING").await {
             error!("Failed to update status to PROCESSING for ID {}: {}", id, e);
             continue;
         }
+// info!("Fetched tin: {:?}", &record.tin);
+//         // Decrypt TIN and BHF_ID
+let decrypted_tin = match decrypt_deterministic(&record.tin) {
+    Ok(d) => {
+        println!("Decrypt tin OK: {}", d);
+        d
+    }
+    Err(e) => {
+        error!("Failed to decrypt TIN for record {}: {}", id, e);
+        mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
+        continue;
+    }
+};
 
-        // Decrypt TIN and BHF_ID
-        let decrypted_tin = match decrypt_deterministic(&record.tin) {
-            Ok(t) => t,
-            Err(e) => {
-                error!("Failed to decrypt TIN for record {}: {}", id, e);
-                mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
-                continue;
-            }
-        };
+// info!("Decrypted TIN: {:?}", decrypted_tin);
 
-        let decrypted_bhf_id = match decrypt_deterministic(&record.bhf_id) {
-            Ok(b) => b,
-            Err(e) => {
-                error!("Failed to decrypt BHF_ID for record {}: {}", id, e);
-                mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
-                continue;
-            }
-        };
 
+    let decrypted_bhf_id = match decrypt(&record.bhf_id) {  // Note: use decrypt, not decrypt_deterministic
+    Ok(d) => d,
+    Err(e) => {
+        error!("Failed to decrypt BHF_ID for record {}: {}", id, e);
+        mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
+        continue;
+    }
+};
+    
+//     match decrypt_deterministic() {
+//     Ok(d) => {
+//         println!("Decrypt id OK: {}", d);
+//         d
+//     }
+//     Err(e) => {
+//         error!("Failed to decrypt BHF_ID for record {}: {}", id, e);
+//         mark_as_failed_with_retry(db.as_ref(), id, 0).await.ok();
+//         continue;
+//     }
+// };
+
+
+
+        
+        
+   
+println!("dec1 (unwrapped): {}", decrypted_tin);
+println!("dec2 (unwrapped): {}", decrypted_bhf_id);
         // Build KRA payload
         let kra_payload = json!({
             "tin": decrypted_tin,
@@ -282,7 +311,7 @@ for id in inserted_ids {
             "receipt": record.receipt,
             "itemList": record.item_list,
         });
-
+println!("jar hitter {:?}",&kra_payload);
         info!("Sending payload to KRA for invoice #{}", record.invc_no);
 
         // Send to KRA endpoint with timeout

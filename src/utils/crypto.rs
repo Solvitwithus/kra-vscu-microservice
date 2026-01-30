@@ -6,6 +6,7 @@ use aes_gcm_siv::{
     aead::{Aead as SivAead, KeyInit as SivKeyInit},
     Aes256GcmSiv, Nonce as SivNonce,
 };
+use axum::Router;
 use base64::{engine::general_purpose, Engine as _};
 use rand::RngCore;
 use tracing::info;
@@ -44,13 +45,13 @@ pub fn encrypt(value: &str) -> String {
 }
 
 /// Decrypt AES-256-GCM ciphertext (expects nonce prepended)
-pub fn decrypt(encoded: &str) -> String {
+pub fn decrypt(encoded: &str) -> Result<String, String> {
     let key_str = env::var("ENCRYPTION_KEY_NON_DETERMINISTIC")
-        .expect("ENCRYPTION_KEY environment variable must be set");
+        .map_err(|_| "ENCRYPTION_KEY environment variable must be set".to_string())?;
 
     let key_bytes = key_str.as_bytes();
     if key_bytes.len() != 32 {
-        panic!("ENCRYPTION_KEY must be exactly 32 bytes long");
+        return Err("ENCRYPTION_KEY must be exactly 32 bytes".to_string());
     }
 
     let key = AesGcmKey::<Aes256Gcm>::from_slice(key_bytes);
@@ -58,10 +59,10 @@ pub fn decrypt(encoded: &str) -> String {
 
     let decoded = general_purpose::STANDARD
         .decode(encoded)
-        .expect("Base64 decode failed");
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
 
     if decoded.len() < 12 {
-        panic!("Invalid ciphertext: too short");
+        return Err("Invalid ciphertext: too short".to_string());
     }
 
     let (nonce_bytes, ciphertext) = decoded.split_at(12);
@@ -69,10 +70,12 @@ pub fn decrypt(encoded: &str) -> String {
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
-        .expect("AES-GCM decryption failed");
+        .map_err(|_| "AES-GCM decryption failed".to_string())?;
 
-    String::from_utf8(plaintext).expect("Invalid UTF-8 after decryption")
+    String::from_utf8(plaintext)
+        .map_err(|e| format!("Invalid UTF-8 after decryption: {}", e))
 }
+
 
 /// === AES-256-GCM-SIV (deterministic / nonce-misuse-resistant) ===
 /// Same plaintext → always same ciphertext
@@ -146,17 +149,6 @@ pub fn decrypt_deterministic(encoded: &str) -> Result<String, String> {
     String::from_utf8(plaintext)
         .map_err(|e| format!("Invalid UTF-8 after decryption: {}", e))
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -8,7 +8,7 @@ use reqwest::Method;
 mod utils;
 // use sales::routing::route_sales;
 use branch_operations::route_branches::{branch_insurances,branch_users,branch_customers};
-use crate::{initialization::initialize::initialization_route, product_management::items_save_items::items_save_items_router, sales::routing::sales_route, signup::signup_login::{log_in, log_in_users, sign_up}, stock_management::route_stock_master::master_router, utils::polling_retry_worker::{self, start_retry_worker}};
+use crate::{initialization::initialize::initialization_route, product_management::items_save_items::items_save_items_router, sales::routing::sales_route, signup::signup_login::{log_in, log_in_users, sign_up}, stock_management::route_stock_master::master_router, utils::{crypto::{decrypt_deterministic, encrypt_deterministic}, polling_retry_worker::{self, start_retry_worker}}};
 mod product_management;
 mod types;
 use axum::{Router, serve};
@@ -31,14 +31,13 @@ async fn main() -> Result<()> {
     let database_url = env::var("DATABASE_URL")?;
     // let db = Database::connect(&database_url).await?;
 let db = Arc::new(Database::connect(&database_url).await?);
-//    polling_retry_worker::start_retry_worker(db.clone());
+   polling_retry_worker::start_retry_worker(db.clone());
     
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
         .allow_headers(Any);
 
-   
     let app = Router::new()
         // .nest("/save-sales-data", route_sales(db.clone()))
         .nest("/branch/customers", branch_customers(db.clone()))
@@ -64,6 +63,7 @@ let db = Arc::new(Database::connect(&database_url).await?);
 
     tracing::info!("Server listening on {}", addr);
 
+   
     serve(listener, app)
         .with_graceful_shutdown(shutdown())
         .await?;
