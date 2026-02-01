@@ -51,9 +51,11 @@ async fn save_item(
     };
 
     for  item in items {
+        let stats = "inserted".to_string();
         let model = ActiveModel{
             tin: Set(Some(user.pin.clone())),
             bhf_id: Set(Some(user.branch_id.clone())),
+            status:Set(Some(stats)),
   item_cd: Set(item.item_cd.clone()),
     item_cls_cd: Set(item.item_cls_cd),
     item_ty_cd: Set(item.item_ty_cd),

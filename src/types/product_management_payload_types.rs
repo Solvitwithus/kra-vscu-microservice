@@ -13,7 +13,7 @@ pub struct Item {
     // Required
     pub tin: Option<String> ,          // CHARY11
     pub bhf_id: Option<String>,       // CHARY2
-    pub status: String,
+    pub status: Option<String>,
     pub item_cd: String,      // CHARY20
     pub item_cls_cd: String,  // CHARY10
     pub item_ty_cd: String,   // CHARY5
@@ -47,6 +47,16 @@ pub struct Item {
     pub regr_id: String,               // CHARY20
     pub modr_nm: String,               // CHARY60
     pub modr_id: String,               // CHARY20
+
+    pub response: Option<KraResponse>
+
 }
 
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KraResponse {
+    pub result_cd: String,
+    pub result_msg: String,
+    pub result_dt: String,
+    pub data: Option<serde_json::Value>,
+}

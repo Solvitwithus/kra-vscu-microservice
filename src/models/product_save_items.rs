@@ -12,7 +12,7 @@ pub struct Model {
     // Required
   pub tin: Option<String> ,          // CHARY11
     pub bhf_id: Option<String>,       // CHARY2
-    pub status: String,
+    pub status: Option<String>,
     pub item_cd: String,      // CHARY20
     pub item_cls_cd: String,  // CHARY10
     pub item_ty_cd: String,   // CHARY5
@@ -50,6 +50,7 @@ pub struct Model {
     pub regr_id: String,             // CHARY20
     pub modr_nm: String,             // CHARY60
     pub modr_id: String,             // CHARY20
+  pub response: Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

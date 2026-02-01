@@ -14,8 +14,8 @@ impl MigrationTrait for Migration {
                     .col(pk_auto(ItemMaster::Id))
 
                     // Required
-                    .col(string_len(ItemMaster::Tin, 11))
-                    .col(string_len(ItemMaster::BhfId, 2))
+                    .col(string(ItemMaster::Tin))
+                    .col(string(ItemMaster::BhfId))
                     .col(string(ItemMaster::Status))
                     .col(string_len(ItemMaster::ItemCd, 20).not_null())
                     .col(string_len(ItemMaster::ItemClsCd, 10).not_null())
@@ -54,6 +54,7 @@ impl MigrationTrait for Migration {
                     .col(string_len(ItemMaster::RegrId, 20).not_null())
                     .col(string_len(ItemMaster::ModrNm, 60).not_null())
                     .col(string_len(ItemMaster::ModrId, 20).not_null())
+                    .col(json_binary_null(ItemMaster::Response))
 
                     // Unique constraint (VERY IMPORTANT)
                     .index(
@@ -112,4 +113,5 @@ enum ItemMaster {
     RegrId,
     ModrNm,
     ModrId,
+    Response
 }
