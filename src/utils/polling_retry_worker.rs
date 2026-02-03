@@ -36,7 +36,7 @@ async fn retry_failed_transactions(
     let now = Utc::now().to_rfc3339();
     
     let failed_records = Entity::find()
-        .filter(Column::Status.eq("FAILED"))
+        .filter(Column::Status.is_in(["FAILED", "PROCESSING"]))
         .filter(Column::RetryCount.lt(5)) // Max 5 retries
         .all(db)
         .await?;

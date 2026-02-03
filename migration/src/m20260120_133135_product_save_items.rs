@@ -17,23 +17,23 @@ impl MigrationTrait for Migration {
                     .col(string(ItemMaster::Tin))
                     .col(string(ItemMaster::BhfId))
                     .col(string(ItemMaster::Status))
-                    .col(string_len(ItemMaster::ItemCd, 20).not_null())
-                    .col(string_len(ItemMaster::ItemClsCd, 10).not_null())
-                    .col(string_len(ItemMaster::ItemTyCd, 5).not_null())
-                    .col(string_len(ItemMaster::ItemNm, 200).not_null())
+                    .col(string(ItemMaster::ItemCd).not_null())
+                    .col(string(ItemMaster::ItemClsCd).not_null())
+                    .col(string(ItemMaster::ItemTyCd).not_null())
+                    .col(string(ItemMaster::ItemNm).not_null())
 
                     // Optional
-                    .col(string_len(ItemMaster::ItemStdNm, 200))
+                    .col(string(ItemMaster::ItemStdNm))
 
                     // Classification
-                    .col(string_len(ItemMaster::OrgnNatCd, 5).not_null())
-                    .col(string_len(ItemMaster::PkgUnitCd, 5).not_null())
-                    .col(string_len(ItemMaster::QtyUnitCd, 5).not_null())
-                    .col(string_len(ItemMaster::TaxTyCd, 5).not_null())
+                    .col(string(ItemMaster::OrgnNatCd).not_null())
+                    .col(string(ItemMaster::PkgUnitCd).not_null())
+                    .col(string(ItemMaster::QtyUnitCd).not_null())
+                    .col(string(ItemMaster::TaxTyCd).not_null())
 
                     // Optional identifiers
-                    .col(string_len(ItemMaster::BtchNo, 10))
-                    .col(string_len(ItemMaster::Bcd, 20))
+                    .col(string(ItemMaster::BtchNo))
+                    .col(string(ItemMaster::Bcd))
 
                     // Prices
                     .col(decimal_len(ItemMaster::DftPrc, 18, 2).not_null())
@@ -44,19 +44,19 @@ impl MigrationTrait for Migration {
                     .col(decimal_len(ItemMaster::GrpPrcL5, 18, 2))
 
                     // Other
-                    .col(string_len(ItemMaster::AddInfo, 7))
+                    .col(string(ItemMaster::AddInfo))
                     .col(decimal_len(ItemMaster::SftyQty, 13, 2))
-                    .col(string_len(ItemMaster::IsrcAplcbYn, 1).not_null())
-                    .col(string_len(ItemMaster::UseYn, 1).not_null())
+                    .col(string(ItemMaster::IsrcAplcbYn).not_null())
+                    .col(string(ItemMaster::UseYn).not_null())
 
                     // Audit
-                    .col(string_len(ItemMaster::RegrNm, 60).not_null())
-                    .col(string_len(ItemMaster::RegrId, 20).not_null())
-                    .col(string_len(ItemMaster::ModrNm, 60).not_null())
-                    .col(string_len(ItemMaster::ModrId, 20).not_null())
+                    .col(string(ItemMaster::RegrNm).not_null())
+                    .col(string(ItemMaster::RegrId).not_null())
+                    .col(string(ItemMaster::ModrNm).not_null())
+                    .col(string(ItemMaster::ModrId).not_null())
                     .col(json_binary_null(ItemMaster::Response))
 
-                    // Unique constraint (VERY IMPORTANT)
+                    // Unique constraint
                     .index(
                         Index::create()
                             .name("uq_item_master_tin_bhf_item")
@@ -113,5 +113,5 @@ enum ItemMaster {
     RegrId,
     ModrNm,
     ModrId,
-    Response
+    Response,
 }

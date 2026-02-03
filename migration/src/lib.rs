@@ -12,6 +12,7 @@ mod m20260121_190839_sign_up;
 
 mod m20260123_093316_device_credentials;
 mod m20260125_184512_item_sales;
+mod m20260203_042535_make_btch_no_nullable;
 
 
 pub struct Migrator;
@@ -28,6 +29,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260121_190839_sign_up::Migration),
             Box::new(m20260123_093316_device_credentials::Migration),
             Box::new(m20260125_184512_item_sales::Migration),
+            Box::new(m20260203_042535_make_btch_no_nullable::Migration),
         ]
     }
 }
