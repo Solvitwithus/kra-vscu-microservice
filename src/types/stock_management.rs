@@ -33,8 +33,8 @@ pub struct SaveStockItemsReq(pub Vec<StockItem>);
 #[derive(Debug, Clone, Deserialize)]
 pub struct StockItem {
     // Header-level fields
-    pub tin: String,               // Taxpayer Identification Number
-    pub bhf_id: String,            // Branch ID
+    pub tin: Option<String>,        // Branch TIN (max 11)
+    pub bhf_id: Option<String>,             // Branch ID
     pub sar_no: u32,               // Stock In/Out Number
     pub org_sar_no: u32,           // Original Stock In/Out Number
     pub reg_ty_cd: String,         // Registration Type Code

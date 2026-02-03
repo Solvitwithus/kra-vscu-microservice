@@ -13,7 +13,8 @@ use crate::{
     types::{
         product_management_payload_types::ItemSaveReq, 
         salespayloadtype::AuthUser
-    }, utils::{bearer::bearer_resolver, crypto::{decrypt, decrypt_deterministic}}, 
+    }, 
+    utils::{bearer::bearer_resolver, crypto::{decrypt, decrypt_deterministic}},
     
 };
 
@@ -65,10 +66,17 @@ async fn save_item(
 
     for item in items {
         let stats = "inserted".to_string();
+        
+        // Handle NOT NULL database constraints by providing defaults for None values
+        // btch_no and bcd are NOT NULL in DB but may come as null from JSON
+        let btch_no_value = item.btch_no.unwrap_or_else(|| String::from(""));
+        let bcd_value = item.bcd.unwrap_or_else(|| String::from(""));
+        
         let model = ActiveModel {
-            tin: Set(Some(user.pin.clone())),
-            bhf_id: Set(Some(user.branch_id.clone())),
-            status: Set(Some(stats)),
+            // These are NOT NULL strings in the DB model
+            tin: Set(user.pin.clone()),
+            bhf_id: Set(user.branch_id.clone()),
+            status: Set(stats),
             item_cd: Set(item.item_cd.clone()),
             item_cls_cd: Set(item.item_cls_cd),
             item_ty_cd: Set(item.item_ty_cd),
@@ -78,8 +86,9 @@ async fn save_item(
             pkg_unit_cd: Set(item.pkg_unit_cd),
             qty_unit_cd: Set(item.qty_unit_cd),
             tax_ty_cd: Set(item.tax_ty_cd),
-            btch_no: Set(item.btch_no),
-            bcd: Set(item.bcd),
+            // NOT NULL fields with default values when incoming JSON has null
+            btch_no: Set(btch_no_value),
+            bcd: Set(bcd_value),
             dft_prc: Set(item.dft_prc),
             grp_prc_l1: Set(item.grp_prc_l1),
             grp_prc_l2: Set(item.grp_prc_l2),
@@ -168,8 +177,8 @@ async fn process_kra_submissions(db: Arc<DatabaseConnection>, inserted_ids: Vec<
             continue;
         }
 
-        // Decrypt TIN
-        let decrypted_tin = match decrypt_deterministic(&record.tin.clone().unwrap_or_default()) {
+        // Decrypt TIN (tin is now a String, not Option<String>)
+        let decrypted_tin = match decrypt_deterministic(&record.tin) {
             Ok(d) => {
                 info!("Decrypt tin OK for record {}", id);
                 d
@@ -181,8 +190,8 @@ async fn process_kra_submissions(db: Arc<DatabaseConnection>, inserted_ids: Vec<
             }
         };
 
-        // Decrypt BHF_ID
-        let decrypted_bhf_id = match decrypt(&record.bhf_id.clone().unwrap_or_default()) {
+        // Decrypt BHF_ID (bhf_id is now a String, not Option<String>)
+        let decrypted_bhf_id = match decrypt(&record.bhf_id) {
             Ok(d) => d,
             Err(e) => {
                 error!("Failed to decrypt BHF_ID for record {}: {}", id, e);
@@ -290,7 +299,7 @@ async fn update_status(
         .ok_or(sea_orm::DbErr::RecordNotFound(format!("ID {}", id)))?;
 
     let mut active_model: ActiveModel = record.into();
-    active_model.status = Set(Some(new_status.to_string()));
+    active_model.status = Set(new_status.to_string()); // Plain String, not Option
     active_model.update(db).await?;
 
     info!("Updated record {} status to {}", id, new_status);
@@ -311,7 +320,7 @@ async fn update_record_with_response(
         .ok_or(sea_orm::DbErr::RecordNotFound(format!("ID {}", id)))?;
 
     let mut active_model: ActiveModel = record.into();
-    active_model.status = Set(Some(new_status.to_string()));
+    active_model.status = Set(new_status.to_string()); // Plain String, not Option
     active_model.response = Set(Some(kra_response));
     active_model.update(db).await?;
 
@@ -332,7 +341,7 @@ async fn mark_as_failed_with_retry(
         .ok_or(sea_orm::DbErr::RecordNotFound(format!("ID {}", id)))?;
 
     let mut active_model: ActiveModel = record.into();
-    active_model.status = Set(Some("FAILED".to_string()));
+    active_model.status = Set("FAILED".to_string()); // Plain String, not Option
     // Add retry count field if you have it in your schema
     // active_model.retry_count = Set(retry_count);
     active_model.update(db).await?;

@@ -8,8 +8,8 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
 
-    pub tin: String,        // Branch TIN (max 11)
-    pub bhf_id: String,     // Branch ID (max 2)
+    pub tin: Option<String>,        // Branch TIN (max 11)
+    pub bhf_id: Option<String>,     // Branch ID (max 2)
     pub item_cd: String,    // Item code (max 20)
     pub rsd_qty: Decimal,   // Remaining quantity (13 digits, 2 decimals)
     pub regr_nm: String,    // Registrant name (max 60)

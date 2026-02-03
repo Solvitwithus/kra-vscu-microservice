@@ -6,15 +6,18 @@ use axum::{
     Router,
 };
 
+use axum_extra::TypedHeader;
+use headers::{Authorization, authorization::Bearer};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::{self, Set}, DatabaseConnection, EntityTrait, TransactionTrait};
 
 use serde_json::{json};
+use tracing::info;
 use std::sync::Arc;
 
 use crate::{
     models::stock_master::ActiveModel,
-    types::stock_management::{StockMasterItem, StockMstSaveReq},
+    types::{salespayloadtype::AuthUser, stock_management::{StockMasterItem, StockMstSaveReq}}, utils::bearer::bearer_resolver,
 };
 
 // ── Router ─────────────────────────────────────────────────────────────────────
@@ -26,9 +29,32 @@ pub fn master_router(db: Arc<DatabaseConnection>) -> Router {
 
 // ── Handlers ───────────────────────────────────────────────────────────────────
 async fn create_stock_items(
+     TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
     State(db): State<Arc<DatabaseConnection>>,
     Json(payload): Json<StockMstSaveReq>,
 ) -> impl IntoResponse {
+    let mut inserted_ids: Vec<i64> = Vec::new();
+    let token = auth.token();
+    info!("Bearer token received");
+
+    // 1️⃣ AUTH FIRST
+    let user: AuthUser = match bearer_resolver(token, db.as_ref()).await {
+        Ok(val) => match serde_json::from_value(val) {
+            Ok(u) => u,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "message": format!("Failed to parse user: {}", e) })),
+                )
+            }
+        },
+        Err(e) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "message": e })),
+            )
+        }
+    };
     let items: Vec<StockMasterItem> = payload.0;
 
     if items.is_empty() {
@@ -52,8 +78,8 @@ async fn create_stock_items(
 
         let active = ActiveModel {
             id: ActiveValue::NotSet,
-            tin: ActiveValue::Set(item.tin.clone()),
-            bhf_id: ActiveValue::Set(item.bhf_id.clone()),
+               tin: Set(Some(user.pin.clone())),
+            bhf_id: Set(Some(user.branch_id.clone())),
             item_cd: ActiveValue::Set(item.item_cd.clone()),
             rsd_qty: ActiveValue::Set(qty),
             regr_nm: ActiveValue::Set(item.regr_nm.clone()),
